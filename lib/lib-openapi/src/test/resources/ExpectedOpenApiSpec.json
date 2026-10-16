@@ -465,7 +465,7 @@
       "parameters": [],
       "responses": {"200": {
         "description": "a BooleanResult",
-        "content": {"application/json": {"schema": {"type": "boolean"}}}
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/org.sagebionetworks.repo.model.BooleanResult"}}}
       }}
     }},
     "/repo/v1/complex-pet/jsonobject/{testJsonObject}": {"get": {
@@ -871,6 +871,14 @@
           "numWhiskers",
           "concreteType"
         ]
+      },
+      "org.sagebionetworks.repo.model.BooleanResult": {
+        "type": "object",
+        "properties": {"result": {
+          "type": "boolean",
+          "description": "The boolean result of the request."
+        }},
+        "description": "Wrapper for a single boolean result."
       },
       "org.sagebionetworks.repo.model.status.StatusEnum": {
         "type": "string",

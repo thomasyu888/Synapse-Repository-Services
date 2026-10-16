@@ -2549,8 +2549,8 @@ public class ControllerToControllerModelTranslatorTest {
 	}
 
 	@Test
-	public void testGetJsonSchemaTypeForClassWithBooleanResult() {
-		assertEquals(Optional.of(Type._boolean), translator.getJsonSchemaBasicTypeForClass("org.sagebionetworks.repo.model.BooleanResult"));
+	public void testGetJsonSchemaTypeForClassWithBooleanResultIsNotBasicType() {
+		assertEquals(Optional.empty(), translator.getJsonSchemaBasicTypeForClass("org.sagebionetworks.repo.model.BooleanResult"));
 	}
 
 	@Test

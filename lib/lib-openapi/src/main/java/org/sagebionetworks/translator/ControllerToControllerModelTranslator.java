@@ -89,7 +89,6 @@ public class ControllerToControllerModelTranslator {
 			Map.entry("boolean", Type._boolean),
 			Map.entry("int", Type.integer),
 			Map.entry("long", Type.number),
-			Map.entry("org.sagebionetworks.repo.model.BooleanResult", Type._boolean),
 			Map.entry("org.json.JSONObject", Type.object),
 			Map.entry("org.sagebionetworks.schema.ObjectSchema", Type.object));
 
