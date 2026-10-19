@@ -24,6 +24,7 @@ import org.sagebionetworks.repo.model.curation.DueDateFilter;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskBundle;
+import org.sagebionetworks.repo.model.curation.TaskState;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
 import org.sagebionetworks.repo.model.curation.execution.RecordSetGenerationExecutionProperties;
 import org.sagebionetworks.repo.model.curation.execution.SampleSheetGenerationExecutionProperties;
@@ -211,6 +212,9 @@ public class CurationTaskManagerImpl implements CurationTaskManager {
         ValidateArgument.required(statusUpdate, "statusUpdate");
         ValidateArgument.required(statusUpdate.getState(), "state");
         ValidateArgument.required(statusUpdate.getEtag(), "etag");
+        // EXECUTING is reserved for ComputeTaskDispatcher, which records the async job that is running the task (PLFM-9843).
+        ValidateArgument.requirement(!TaskState.EXECUTING.equals(statusUpdate.getState()),
+                "A task cannot be manually moved to the EXECUTING state. A task is only EXECUTING while it is being executed.");
 
         CurationTask task = curationTaskDao.getCurationTask(taskId)
                 .orElseThrow(() -> new NotFoundException("Task not found: " + taskId));
