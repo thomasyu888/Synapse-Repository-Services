@@ -286,6 +286,35 @@ public class ITCurationTaskControllerTest {
     }
 
     @Test
+    public void testUpdateTaskStatusWithExecutingState() throws SynapseException {
+        CurationTask task = new CurationTask()
+                .setProjectId(project.getId())
+                .setDataType("fastq: file-based")
+                .setInstructions("upload files")
+                .setTaskProperties(
+                        new FileBasedMetadataTaskProperties()
+                                .setFileViewId(view.getId())
+                                .setUploadFolderId(folder.getId())
+                );
+
+        task = synapse.createCurationTask(task);
+
+        try {
+            TaskStatus statusUpdate = new TaskStatus()
+                    .setState(TaskState.EXECUTING)
+                    .setEtag(task.getEtag());
+            Long taskId = task.getTaskId();
+
+            // call under test - only the system can move a task to EXECUTING
+            assertThrows(SynapseBadRequestException.class, () -> synapse.updateTaskStatus(taskId, statusUpdate));
+
+            assertEquals(TaskState.NOT_STARTED, synapse.getTaskStatus(taskId).getState());
+        } finally {
+            synapse.deleteMetadataTask(task.getTaskId());
+        }
+    }
+
+    @Test
     public void testListCurationTasksWithFilters() throws SynapseException {
         CurationTask fbTask = new CurationTask()
                 .setProjectId(project.getId())

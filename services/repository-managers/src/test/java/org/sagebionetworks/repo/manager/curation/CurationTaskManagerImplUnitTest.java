@@ -833,6 +833,38 @@ public class CurationTaskManagerImplUnitTest {
     }
 
     @Test
+    public void testUpdateTaskStatusWithExecutingState() {
+        TaskStatus statusUpdate = new TaskStatus().setState(TaskState.EXECUTING).setEtag("etag-1");
+
+        // Call under test
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate));
+        assertEquals("A task cannot be manually moved to the EXECUTING state. A task is only EXECUTING while it is being executed.",
+                ex.getMessage());
+
+        verifyNoInteractions(mockCurationTaskDao, mockAuthorizationManager, mockAclManager, mockEntityManager, mockUserGroupDao);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskState.class, mode = EnumSource.Mode.EXCLUDE, names = {"EXECUTING"})
+    public void testUpdateTaskStatusWithManuallySettableState(TaskState state) {
+        TaskStatus statusUpdate = new TaskStatus().setState(state).setEtag("etag-1");
+        CurationTask task = new CurationTask().setTaskId(taskId).setProjectId(projectId).setAssigneePrincipalId("999");
+        TaskStatus expectedResult = new TaskStatus().setTaskId(taskId).setState(state);
+
+        when(mockCurationTaskDao.getCurationTask(taskId)).thenReturn(Optional.of(task));
+        when(mockAuthorizationManager.canAccess(eq(userInfo), eq(projectId), eq(ObjectType.ENTITY), eq(ACCESS_TYPE.UPDATE)))
+                .thenReturn(AuthorizationStatus.authorized());
+        when(mockCurationTaskDao.updateTaskStatus(eq(userId), eq(taskId), eq(statusUpdate))).thenReturn(expectedResult);
+
+        // Call under test
+        TaskStatus result = curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate);
+
+        assertEquals(expectedResult, result);
+        verify(mockCurationTaskDao).updateTaskStatus(userId, taskId, statusUpdate);
+    }
+
+    @Test
     public void testCreateCurationTaskFailsWithMissingProjectId() {
         CurationTask task = createCurationTask().setProjectId(null);
 
