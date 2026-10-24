@@ -2,6 +2,7 @@ package org.sagebionetworks;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -56,6 +57,7 @@ import org.sagebionetworks.repo.model.table.ColumnType;
 import org.sagebionetworks.repo.model.table.DefiningSqlEntityType;
 import org.sagebionetworks.repo.model.table.DownloadPFBRequest;
 import org.sagebionetworks.repo.model.table.DownloadPFBResult;
+import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.MaterializedView;
 import org.sagebionetworks.repo.model.table.PaginatedColumnModels;
 import org.sagebionetworks.repo.model.table.PartialRow;
@@ -74,6 +76,9 @@ import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
 import org.sagebionetworks.repo.model.table.TableEntity;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
+import org.sagebionetworks.repo.model.table.TableLineage;
+import org.sagebionetworks.repo.model.table.TableLineageEdge;
+import org.sagebionetworks.repo.model.table.TableLineageNode;
 import org.sagebionetworks.repo.model.table.TableSchemaChangeRequest;
 import org.sagebionetworks.repo.model.table.TableSchemaChangeResponse;
 import org.sagebionetworks.repo.model.table.TableUpdateRequest;
@@ -893,6 +898,45 @@ public class IT100TableControllerTest {
 		});
 	}
 	
+	@Test
+	public void testGetTableLineage() throws Exception {
+		ColumnModel cm = new ColumnModel();
+		cm.setName("aString");
+		cm.setColumnType(ColumnType.STRING);
+		cm.setMaximumSize(100L);
+		cm = synapse.createColumnModel(cm);
+		TableEntity table = createTable(Lists.newArrayList(cm.getId()), synapse);
+
+		MaterializedView first = synapse.createEntity(new MaterializedView()
+				.setDefiningSQL("select aString from " + table.getId())
+				.setName(UUID.randomUUID().toString())
+				.setParentId(table.getParentId()));
+		MaterializedView second = synapse.createEntity(new MaterializedView()
+				.setDefiningSQL("select aString from " + first.getId())
+				.setName(UUID.randomUUID().toString())
+				.setParentId(table.getParentId()));
+
+		// call under test
+		TableLineage lineage = synapse.getTableLineage(first.getId(), LineageDirection.BOTH, null);
+
+		assertEquals(first.getId(), lineage.getRootId());
+		assertEquals(List.of(first.getId(), table.getId(), second.getId()),
+				lineage.getNodes().stream().map(TableLineageNode::getId).collect(Collectors.toList()));
+		assertEquals(List.of(first.getName(), table.getName(), second.getName()),
+				lineage.getNodes().stream().map(TableLineageNode::getName).collect(Collectors.toList()));
+		assertEquals(List.of(
+				new TableLineageEdge().setSourceId(table.getId()).setDependentId(first.getId()),
+				new TableLineageEdge().setSourceId(first.getId()).setDependentId(second.getId())), lineage.getEdges());
+		assertFalse(lineage.getIsTruncated());
+
+		// call under test
+		TableLineage upstream = synapse.getTableLineage(second.getId(), LineageDirection.UPSTREAM, 1);
+
+		assertEquals(List.of(second.getId(), first.getId()),
+				upstream.getNodes().stream().map(TableLineageNode::getId).collect(Collectors.toList()));
+		assertTrue(upstream.getIsTruncated());
+	}
+
 	/**
 	 * Test added for PLFM-7240.
 	 * @throws Exception

@@ -12,6 +12,7 @@ import org.sagebionetworks.repo.manager.file.FileHandleUrlRequest;
 import org.sagebionetworks.repo.manager.table.ColumnModelManager;
 import org.sagebionetworks.repo.manager.table.TableEntityManager;
 import org.sagebionetworks.repo.manager.table.TableIndexConnectionFactory;
+import org.sagebionetworks.repo.manager.table.TableLineageManager;
 import org.sagebionetworks.repo.manager.table.TableManagerSupport;
 import org.sagebionetworks.repo.manager.table.TableQueryManager;
 import org.sagebionetworks.repo.model.DatastoreException;
@@ -22,6 +23,7 @@ import org.sagebionetworks.repo.model.file.FileHandleAssociateType;
 import org.sagebionetworks.repo.model.file.FileHandleResults;
 import org.sagebionetworks.repo.model.table.ColumnModel;
 import org.sagebionetworks.repo.model.table.ColumnType;
+import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.PaginatedColumnModels;
 import org.sagebionetworks.repo.model.table.Row;
 import org.sagebionetworks.repo.model.table.RowReference;
@@ -31,6 +33,7 @@ import org.sagebionetworks.repo.model.table.RowSet;
 import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
 import org.sagebionetworks.repo.model.table.TableBundle;
+import org.sagebionetworks.repo.model.table.TableLineage;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
 import org.sagebionetworks.repo.model.table.ViewEntityType;
 import org.sagebionetworks.repo.web.NotFoundException;
@@ -63,6 +66,8 @@ public class TableServicesImpl implements TableServices {
 	TableManagerSupport tableManagerSupport;
 	@Autowired
 	TableIndexConnectionFactory connectionFactory;
+	@Autowired
+	TableLineageManager tableLineageManager;
 	
 
 	@Override
@@ -246,4 +251,11 @@ public class TableServicesImpl implements TableServices {
 		bundle.setMaxRowsPerPage(tableQueryManager.getMaxRowsPerPage(tableSchema));
 		return bundle;
 	}	
+
+	@Override
+	public TableLineage getTableLineage(Long userId, String tableId, LineageDirection direction, Integer maxDepth) {
+		ValidateArgument.required(userId, "userId");
+		UserInfo userInfo = userManager.getUserInfo(userId);
+		return tableLineageManager.getLineage(userInfo, IdAndVersion.parse(tableId), direction, maxDepth);
+	}
 }

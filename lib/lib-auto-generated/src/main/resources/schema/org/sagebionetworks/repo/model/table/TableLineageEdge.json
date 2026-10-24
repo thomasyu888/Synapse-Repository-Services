@@ -1,0 +1,13 @@
+{
+	"description": "A defining-SQL dependency in a table lineage graph: the dependent object is built from the source.",
+	"properties": {
+		"sourceId": {
+			"type": "string",
+			"description": "The id of the table or view that is read (with its version when pinned)."
+		},
+		"dependentId": {
+			"type": "string",
+			"description": "The id of the materialized view or search index built from the source."
+		}
+	}
+}

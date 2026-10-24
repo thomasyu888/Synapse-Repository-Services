@@ -989,6 +989,7 @@ public class UrlHelpers {
 	public static final String ENTITY_TABLE_UPLOAD_CSV_ASYNC_GET = ENTITY_TABLE_UPLOAD_CSV + ASYNC_GET_REQUEST;
 	public static final String TABLE_COLUMNS_OF_SCOPE = COLUMN+"/view/scope";
 	public static final String TABLE_SNAPSHOT = ENTITY_TABLE+"/snapshot";
+	public static final String ENTITY_TABLE_LINEAGE = ENTITY_TABLE+"/lineage";
 
 	public static final String ENTITY_TABLE_DOWNOLAD_PFB = ENTITY_TABLE + "/download/pfb";
 	public static final String ENTITY_TABLE_DOWNLOAD_PFB_ASYNC_START = ENTITY_TABLE_DOWNOLAD_PFB + ASYNC_START_REQUEST;

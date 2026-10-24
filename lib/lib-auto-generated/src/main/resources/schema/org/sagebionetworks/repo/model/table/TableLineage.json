@@ -1,0 +1,27 @@
+{
+	"description": "The lineage of a table or view: the objects its index is built from (upstream) and the objects built from it (downstream), following the definingSQL of materialized views and search indexes.",
+	"properties": {
+		"rootId": {
+			"type": "string",
+			"description": "The id of the object the lineage was requested for."
+		},
+		"nodes": {
+			"description": "Every object in the lineage, the root included.",
+			"type": "array",
+			"items": {
+				"$ref": "org.sagebionetworks.repo.model.table.TableLineageNode"
+			}
+		},
+		"edges": {
+			"description": "The dependencies between the nodes.",
+			"type": "array",
+			"items": {
+				"$ref": "org.sagebionetworks.repo.model.table.TableLineageEdge"
+			}
+		},
+		"isTruncated": {
+			"type": "boolean",
+			"description": "True when the lineage was cut short by maxDepth or by the limit on the number of nodes."
+		}
+	}
+}

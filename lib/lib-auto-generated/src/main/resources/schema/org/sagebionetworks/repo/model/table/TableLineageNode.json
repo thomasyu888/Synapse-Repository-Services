@@ -1,0 +1,34 @@
+{
+	"description": "A table, view or search index in a table lineage graph.",
+	"properties": {
+		"id": {
+			"type": "string",
+			"description": "The id of the object, with its version when the dependency is pinned to a version (e.g. 'syn123' or 'syn123.4')."
+		},
+		"access": {
+			"description": "What the caller may see of this object.",
+			"$ref": "org.sagebionetworks.repo.model.table.LineageAccess"
+		},
+		"name": {
+			"type": "string",
+			"description": "The name of the object. Only included when access is READABLE."
+		},
+		"concreteType": {
+			"type": "string",
+			"description": "The concrete type of the entity (e.g. org.sagebionetworks.repo.model.table.MaterializedView). Only included when access is READABLE."
+		},
+		"tableState": {
+			"description": "The current state of the object's index. Not included when the object has no index status yet, or access is not READABLE.",
+			"$ref": "org.sagebionetworks.repo.model.table.TableState"
+		},
+		"stateChangedOn": {
+			"type": "string",
+			"format": "date-time",
+			"description": "When the object's index state last changed. A materialized view that is already AVAILABLE stays AVAILABLE while it rebuilds and only this time advances, when the rebuilt index replaces the old one. Only included with tableState."
+		},
+		"errorMessage": {
+			"type": "string",
+			"description": "When tableState is PROCESSING_FAILED, the reason the index could not be built."
+		}
+	}
+}

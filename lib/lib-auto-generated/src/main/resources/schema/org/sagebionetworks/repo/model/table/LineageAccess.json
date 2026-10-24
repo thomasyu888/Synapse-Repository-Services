@@ -1,0 +1,18 @@
+{
+    "type": "string",
+    "description": "What the caller may see of a node in a table lineage graph.",
+    "enum": [
+        {
+            "name": "READABLE",
+            "description": "The caller can read the object: its name, type and state are included, and the lineage continues through it."
+        },
+        {
+            "name": "RESTRICTED",
+            "description": "The caller cannot read the object: only its id is included, and the lineage does not continue past it."
+        },
+        {
+            "name": "NOT_FOUND",
+            "description": "The object no longer exists (or is in the trash can), but a dependency on it is still recorded."
+        }
+    ]
+}

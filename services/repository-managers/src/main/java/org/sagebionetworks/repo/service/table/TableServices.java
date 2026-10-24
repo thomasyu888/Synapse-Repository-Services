@@ -6,6 +6,7 @@ import java.util.List;
 import org.sagebionetworks.repo.model.DatastoreException;
 import org.sagebionetworks.repo.model.entity.IdAndVersion;
 import org.sagebionetworks.repo.model.table.ColumnModel;
+import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.PaginatedColumnModels;
 import org.sagebionetworks.repo.model.table.RowReference;
 import org.sagebionetworks.repo.model.table.RowReferenceSet;
@@ -13,6 +14,7 @@ import org.sagebionetworks.repo.model.table.RowSelection;
 import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
 import org.sagebionetworks.repo.model.table.TableBundle;
+import org.sagebionetworks.repo.model.table.TableLineage;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
 import org.sagebionetworks.repo.model.table.ViewEntityType;
 import org.sagebionetworks.repo.web.NotFoundException;
@@ -148,4 +150,15 @@ public interface TableServices {
 	 * @return
 	 */
 	public TableBundle getTableBundle(IdAndVersion idAndVersion);
+
+	/**
+	 * Get the lineage of a table or view: what its index is built from, and what is built from it.
+	 * 
+	 * @param userId
+	 * @param tableId   The id of the table or view, with an optional version (e.g. syn123.4)
+	 * @param direction Which dependencies to follow; null for both directions
+	 * @param maxDepth  How many dependency steps to follow; null for the default
+	 * @return
+	 */
+	public TableLineage getTableLineage(Long userId, String tableId, LineageDirection direction, Integer maxDepth);
 }

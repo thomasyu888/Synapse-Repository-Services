@@ -410,6 +410,7 @@ import org.sagebionetworks.repo.model.table.DownloadFromTableRequest;
 import org.sagebionetworks.repo.model.table.DownloadFromTableResult;
 import org.sagebionetworks.repo.model.table.DownloadPFBRequest;
 import org.sagebionetworks.repo.model.table.DownloadPFBResult;
+import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.PaginatedColumnModels;
 import org.sagebionetworks.repo.model.table.Query;
 import org.sagebionetworks.repo.model.table.QueryBundleRequest;
@@ -424,6 +425,7 @@ import org.sagebionetworks.repo.model.table.RowSelection;
 import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
+import org.sagebionetworks.repo.model.table.TableLineage;
 import org.sagebionetworks.repo.model.table.TableUpdateRequest;
 import org.sagebionetworks.repo.model.table.TableUpdateResponse;
 import org.sagebionetworks.repo.model.table.TableUpdateTransactionRequest;
@@ -6025,6 +6027,21 @@ public class SynapseClientImpl extends BaseClientImpl implements SynapseClient {
 		ValidateArgument.required(tableId, "tableId");
 		String url = "/entity/"+tableId+"/table/snapshot";
 		return postJSONEntity(getRepoEndpoint(), url, request, SnapshotResponse.class);
+	}
+
+	@Override
+	public TableLineage getTableLineage(String tableId, LineageDirection direction, Integer maxDepth) throws SynapseException {
+		ValidateArgument.required(tableId, "tableId");
+		StringBuilder url = new StringBuilder("/entity/" + tableId + "/table/lineage");
+		String separator = "?";
+		if (direction != null) {
+			url.append(separator).append("direction=").append(direction.name());
+			separator = "&";
+		}
+		if (maxDepth != null) {
+			url.append(separator).append("maxDepth=").append(maxDepth);
+		}
+		return getJSONEntity(getRepoEndpoint(), url.toString(), TableLineage.class);
 	}
 	
 	@Override

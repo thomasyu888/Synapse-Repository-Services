@@ -364,6 +364,7 @@ import org.sagebionetworks.repo.model.table.CsvTableDescriptor;
 import org.sagebionetworks.repo.model.table.DownloadFromTableResult;
 import org.sagebionetworks.repo.model.table.DownloadPFBRequest;
 import org.sagebionetworks.repo.model.table.DownloadPFBResult;
+import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.PaginatedColumnModels;
 import org.sagebionetworks.repo.model.table.Query;
 import org.sagebionetworks.repo.model.table.QueryOptions;
@@ -376,6 +377,7 @@ import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
 import org.sagebionetworks.repo.model.table.SubmissionView;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
+import org.sagebionetworks.repo.model.table.TableLineage;
 import org.sagebionetworks.repo.model.table.TableUpdateRequest;
 import org.sagebionetworks.repo.model.table.TableUpdateResponse;
 import org.sagebionetworks.repo.model.table.UploadToTablePreviewRequest;
@@ -3875,6 +3877,18 @@ public interface SynapseClient extends BaseClient {
 	 * @throws SynapseException 
 	 */
 	public SnapshotResponse createTableSnapshot(String tableId, SnapshotRequest request) throws SynapseException;
+
+	/**
+	 * Get the lineage of a table or view: the tables and views its index is built from, and the materialized views and
+	 * search indexes built from it.
+	 * 
+	 * @param tableId   The id of the table or view, with an optional version (e.g. syn123.4)
+	 * @param direction UPSTREAM, DOWNSTREAM or BOTH; null for BOTH
+	 * @param maxDepth  How many dependency steps to follow in each direction; null for the default
+	 * @return
+	 * @throws SynapseException
+	 */
+	public TableLineage getTableLineage(String tableId, LineageDirection direction, Integer maxDepth) throws SynapseException;
 	
 	/**
 	 * Request to retrieve statistics about specific objects. The user should have

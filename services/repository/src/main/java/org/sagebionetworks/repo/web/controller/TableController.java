@@ -23,6 +23,7 @@ import org.sagebionetworks.repo.model.table.DownloadFromTableRequest;
 import org.sagebionetworks.repo.model.table.DownloadFromTableResult;
 import org.sagebionetworks.repo.model.table.DownloadPFBRequest;
 import org.sagebionetworks.repo.model.table.DownloadPFBResult;
+import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.PaginatedColumnModels;
 import org.sagebionetworks.repo.model.table.QueryBundleRequest;
 import org.sagebionetworks.repo.model.table.QueryNextPageToken;
@@ -36,6 +37,7 @@ import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
 import org.sagebionetworks.repo.model.table.TableFailedException;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
+import org.sagebionetworks.repo.model.table.TableLineage;
 import org.sagebionetworks.repo.model.table.TableUnavailableException;
 import org.sagebionetworks.repo.model.table.TableUpdateTransactionRequest;
 import org.sagebionetworks.repo.model.table.TableUpdateTransactionResponse;
@@ -1414,6 +1416,33 @@ public class TableController {
 			@RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId, @PathVariable String id,
 			@RequestBody SnapshotRequest request) {
 		return serviceProvider.getTableServices().createTableSnapshot(userId, id, request);
+	}
+
+	/**
+	 * Get the lineage of a table or view: the tables and views its index is built from (upstream), and the
+	 * <a href="${org.sagebionetworks.repo.model.table.MaterializedView}">MaterializedViews</a> and search indexes built
+	 * from it (downstream), following each one's definingSQL. When a source becomes available, everything downstream of
+	 * it is rebuilt in turn. A view that is already AVAILABLE stays AVAILABLE while it rebuilds, so each node's
+	 * stateChangedOn, not its tableState, shows how far a change has travelled.
+	 * <p>
+	 * The caller must have READ on the given table or view. Any other object the caller cannot read is included by id
+	 * only, with access RESTRICTED, and the lineage does not continue past it. Siblings (other objects built from the
+	 * same source) are not included.
+	 * </p>
+	 * 
+	 * @param id        The ID of the table or view, with an optional version (e.g. syn123.4).
+	 * @param direction UPSTREAM, DOWNSTREAM or BOTH (the default).
+	 * @param maxDepth  How many dependency steps to follow in each direction, from 1 to 50 (default 10).
+	 * @return
+	 */
+	@ResponseStatus(HttpStatus.OK)
+	@RequiredScope({view})
+	@RequestMapping(value = UrlHelpers.ENTITY_TABLE_LINEAGE, method = RequestMethod.GET)
+	public @ResponseBody TableLineage getTableLineage(
+			@RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId, @PathVariable String id,
+			@RequestParam(value = "direction", required = false) LineageDirection direction,
+			@RequestParam(value = "maxDepth", required = false) Integer maxDepth) {
+		return serviceProvider.getTableServices().getTableLineage(userId, id, direction, maxDepth);
 	}
 
 	/**

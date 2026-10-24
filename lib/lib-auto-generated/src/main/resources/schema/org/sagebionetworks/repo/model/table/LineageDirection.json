@@ -1,0 +1,18 @@
+{
+    "type": "string",
+    "description": "Which way to follow the defining-SQL dependencies of a table or view when building its lineage.",
+    "enum": [
+        {
+            "name": "UPSTREAM",
+            "description": "The tables and views the object is built from, and what they are built from in turn."
+        },
+        {
+            "name": "DOWNSTREAM",
+            "description": "The materialized views and search indexes built from the object, and what is built from them in turn."
+        },
+        {
+            "name": "BOTH",
+            "description": "Both upstream and downstream. Siblings (other objects built from the same source) are not included."
+        }
+    ]
+}
