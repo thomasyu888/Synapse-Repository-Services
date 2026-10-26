@@ -36,6 +36,7 @@ import org.sagebionetworks.repo.manager.entity.decider.UsersEntityAccessInfo;
 import org.sagebionetworks.repo.model.ACCESS_TYPE;
 import org.sagebionetworks.repo.model.AuthorizationConstants;
 import org.sagebionetworks.repo.model.EntityHeader;
+import org.sagebionetworks.repo.model.NodeConstants.BOOTSTRAP_NODES;
 import org.sagebionetworks.repo.model.NodeDAO;
 import org.sagebionetworks.repo.model.UnauthorizedException;
 import org.sagebionetworks.repo.model.UserInfo;
@@ -267,6 +268,20 @@ public class TableLineageManagerTest {
 		assertTrue(result.getIsTruncated());
 		// A hub's dependents are read only up to what the graph can hold.
 		verify(mockDefiningSqlDependencyDao).getDependentsOfSources(Set.of(root), TableLineageManager.MAX_NODES + 1);
+	}
+
+	@Test
+	public void testGetLineageWithTrashedDependent() {
+		// syn4 was moved to the trash: its dependency on syn3 stays until the trash is purged.
+		existing.get(4L).setBenefactorId(BOOTSTRAP_NODES.TRASH.getId());
+		setupDownstream();
+
+		// call under test
+		TableLineage result = manager.getLineage(user, IdAndVersion.parse("syn3"), LineageDirection.DOWNSTREAM, null);
+
+		assertEquals(List.of(readableNode(3, "cohort", MATERIALIZED_VIEW, TableState.AVAILABLE, null),
+				new TableLineageNode().setId("syn4").setAccess(LineageAccess.NOT_FOUND)), result.getNodes());
+		assertEquals(List.of(edge("syn3", "syn4")), result.getEdges());
 	}
 
 	@Test

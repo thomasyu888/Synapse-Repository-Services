@@ -15,6 +15,7 @@ import org.sagebionetworks.repo.manager.entity.EntityAuthorizationManager;
 import org.sagebionetworks.repo.manager.entity.decider.UsersEntityAccessInfo;
 import org.sagebionetworks.repo.model.ACCESS_TYPE;
 import org.sagebionetworks.repo.model.EntityHeader;
+import org.sagebionetworks.repo.model.NodeConstants.BOOTSTRAP_NODES;
 import org.sagebionetworks.repo.model.NodeDAO;
 import org.sagebionetworks.repo.model.UnauthorizedException;
 import org.sagebionetworks.repo.model.UserInfo;
@@ -50,6 +51,8 @@ public class TableLineageManager {
 	 * The maximum number of nodes in a single lineage graph, the root included.
 	 */
 	public static final int MAX_NODES = 500;
+
+	private static final Long TRASH_FOLDER_ID = BOOTSTRAP_NODES.TRASH.getId();
 
 	private static final Comparator<IdAndVersion> ID_ORDER = Comparator.comparing(IdAndVersion::getId)
 			.thenComparing(id -> id.getVersion().orElse(-1L));
@@ -178,8 +181,8 @@ public class TableLineageManager {
 	}
 
 	/**
-	 * A recorded dependency can outlive the entity it names (a deleted source table), so a missing entity is reported
-	 * as NOT_FOUND rather than treated as an error.
+	 * A recorded dependency can outlive the entity it names: a deleted table, or one in the trash, whose dependency is
+	 * only removed when the trash is purged. Either is reported as NOT_FOUND rather than treated as an error.
 	 */
 	void resolveAccess(UserInfo userInfo, LineageGraph graph, List<IdAndVersion> ids) {
 		if (ids.isEmpty()) {
@@ -193,7 +196,8 @@ public class TableLineageManager {
 				.filter(info -> info.getAuthorizationStatus().isAuthorized()).map(UsersEntityAccessInfo::getEntityId)
 				.collect(Collectors.toSet());
 		for (IdAndVersion id : ids) {
-			if (!graph.headers.containsKey(id.getId())) {
+			EntityHeader header = graph.headers.get(id.getId());
+			if (header == null || TRASH_FOLDER_ID.equals(header.getBenefactorId())) {
 				graph.access.put(id, LineageAccess.NOT_FOUND);
 			} else if (readable.contains(id.getId())) {
 				graph.access.put(id, LineageAccess.READABLE);
