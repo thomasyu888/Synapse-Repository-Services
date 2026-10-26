@@ -35,6 +35,8 @@ import org.sagebionetworks.repo.model.table.RowReferenceSetResults;
 import org.sagebionetworks.repo.model.table.RowSelection;
 import org.sagebionetworks.repo.model.table.SnapshotRequest;
 import org.sagebionetworks.repo.model.table.SnapshotResponse;
+import org.sagebionetworks.repo.model.table.SqlQueryRequest;
+import org.sagebionetworks.repo.model.table.SqlQueryResponse;
 import org.sagebionetworks.repo.model.table.TableFailedException;
 import org.sagebionetworks.repo.model.table.TableFileHandleResults;
 import org.sagebionetworks.repo.model.table.TableLineage;
@@ -1443,6 +1445,58 @@ public class TableController {
 			@RequestParam(value = "direction", required = false) LineageDirection direction,
 			@RequestParam(value = "maxDepth", required = false) Integer maxDepth) {
 		return serviceProvider.getTableServices().getTableLineage(userId, id, direction, maxDepth);
+	}
+
+	/**
+	 * Asynchronously start running Synapse SQL that may combine several tables and views, such as the SQL of a
+	 * <a href="${org.sagebionetworks.repo.model.table.SqlWorksheet}">SqlWorksheet</a>, and get its first rows. Use the
+	 * returned job id and <a href="${GET.table.sql.query.async.get.asyncToken}">GET
+	 * /table/sql/query/async/get/{asyncToken}</a> to get the results.
+	 * <p>
+	 * The SQL follows the rules of a materialized view's definingSQL. Nothing is saved: no entity is created and no
+	 * dependency is recorded, so running SQL never adds to table lineage. The caller must be able to read every table
+	 * and view the SQL names, with row-level access; rows that come from a view are limited to the ones the caller can
+	 * read. The result is built for the request and discarded, and building it may take at most 60 seconds.
+	 * </p>
+	 * 
+	 * @param request
+	 * @return
+	 */
+	@RequiredScope({view,download})
+	@ResponseStatus(HttpStatus.CREATED)
+	@RequestMapping(value = UrlHelpers.TABLE_SQL_QUERY_ASYNC_START, method = RequestMethod.POST)
+	public @ResponseBody AsyncJobId sqlQueryAsyncStart(
+			@RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId,
+			@RequestBody SqlQueryRequest request) {
+		AsynchronousJobStatus job = serviceProvider.getAsynchronousJobServices().startJob(userId, request);
+		AsyncJobId asyncJobId = new AsyncJobId();
+		asyncJobId.setToken(job.getJobId());
+		return asyncJobId;
+	}
+
+	/**
+	 * Get the results of SQL started with <a href="${POST.table.sql.query.async.start}">POST
+	 * /table/sql/query/async/start</a>.
+	 * 
+	 * <p>
+	 * Note: When the result is not ready yet, this method will return a status code of 202 (ACCEPTED) and the
+	 * response body will be a <a href="${org.sagebionetworks.repo.model.asynch.AsynchronousJobStatus}"
+	 * >AsynchronousJobStatus</a> object.
+	 * </p>
+	 * 
+	 * @param asyncToken
+	 * @return
+	 * @throws Throwable
+	 */
+	@RequiredScope({view,download})
+	@ResponseStatus(HttpStatus.CREATED)
+	@RequestMapping(value = UrlHelpers.TABLE_SQL_QUERY_ASYNC_GET, method = RequestMethod.GET)
+	public @ResponseBody SqlQueryResponse sqlQueryAsyncGet(
+			@RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId, @PathVariable String asyncToken)
+			throws Throwable {
+		AsynchronousJobStatus jobStatus = serviceProvider.getAsynchronousJobServices().getJobStatusAndThrow(userId,
+				asyncToken);
+		return (SqlQueryResponse) jobStatus.getResponseBody();
 	}
 
 	/**

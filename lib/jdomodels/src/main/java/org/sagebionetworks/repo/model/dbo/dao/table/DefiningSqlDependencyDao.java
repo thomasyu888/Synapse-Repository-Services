@@ -75,4 +75,26 @@ public interface DefiningSqlDependencyDao {
 	 */
 	List<DependentObject> getDependentsPage(IdAndVersion sourceTableId, long limit, long offset);
 
+	/**
+	 * A recorded dependency: the dependent object and one of its source tables.
+	 */
+	record Dependency(IdAndVersion objectId, IdAndVersion sourceTableId) {}
+
+	/**
+	 * Forward lookup of the source tables of several objects in one query.
+	 *
+	 * @param objectIds The ids and (optional) versions of the dependent objects
+	 * @return Every dependency of the given objects, ordered by object then source
+	 */
+	List<Dependency> getSourceTablesOfObjects(Set<IdAndVersion> objectIds);
+
+	/**
+	 * Reverse lookup of the dependents of several source tables in one query.
+	 *
+	 * @param sourceTableIds The ids and (optional) versions of the source tables
+	 * @param limit          The most dependencies to return
+	 * @return Up to limit dependencies on the given source tables, ordered by source then object
+	 */
+	List<Dependency> getDependentsOfSources(Set<IdAndVersion> sourceTableIds, long limit);
+
 }

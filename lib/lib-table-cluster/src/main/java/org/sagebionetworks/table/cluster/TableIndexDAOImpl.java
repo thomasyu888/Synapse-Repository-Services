@@ -57,6 +57,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1630,6 +1631,27 @@ public class TableIndexDAOImpl implements TableIndexDAO {
 	@Override
 	public void update(String sql, Map<String, Object> parameters) {
 		namedTemplate.update(sql, parameters);
+	}
+
+	@Override
+	public void update(String sql, Map<String, Object> parameters, int queryTimeoutSeconds) {
+		ValidateArgument.requirement(queryTimeoutSeconds > 0, "queryTimeoutSeconds must be greater than zero");
+		// A template of its own, so the timeout applies to this statement only. It shares the data source, so the
+		// statement still joins any transaction already open on it.
+		JdbcTemplate timedTemplate = new JdbcTemplate(template.getDataSource());
+		timedTemplate.setQueryTimeout(queryTimeoutSeconds);
+		new NamedParameterJdbcTemplate(timedTemplate).update(sql, parameters);
+	}
+
+	@Override
+	public List<String> getTableNamesCreatedBefore(String tableNamePrefix, Timestamp createdBefore) {
+		ValidateArgument.requiredNotBlank(tableNamePrefix, "tableNamePrefix");
+		ValidateArgument.required(createdBefore, "createdBefore");
+		String escapedPrefix = tableNamePrefix.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%");
+		return template.queryForList(
+				"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE ?"
+						+ " AND CREATE_TIME < ? ORDER BY TABLE_NAME",
+				String.class, escapedPrefix + "%", createdBefore);
 	}
 	
 	@Override

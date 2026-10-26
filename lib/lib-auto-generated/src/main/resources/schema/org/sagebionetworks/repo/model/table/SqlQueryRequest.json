@@ -1,0 +1,18 @@
+{
+	"description": "<p>Run Synapse SQL that may combine several tables and views, such as the SQL of a <a href=\"${org.sagebionetworks.repo.model.table.SqlWorksheet}\">SqlWorksheet</a>, and get its first rows. The SQL follows the rules of a materialized view's definingSQL, so it may JOIN or UNION tables and views. Nothing is saved: no entity is created, no dependency is recorded, and the result is built for this request only and then discarded.</p><p>The caller must be able to read every table and view the SQL names, with row-level access: a source the caller may only see in aggregate cannot be used here. Rows that come from a view are limited to the ones the caller can read.</p>",
+	"implements": [
+		{
+			"$ref": "org.sagebionetworks.repo.model.asynch.AsynchronousRequestBody"
+		}
+	],
+	"properties": {
+		"sql": {
+			"type": "string",
+			"description": "The Synapse SQL to run."
+		},
+		"limit": {
+			"type": "integer",
+			"description": "The most rows to return, from 1 to 100. Defaults to 100."
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package org.sagebionetworks.repo.manager.table;
 
 import java.io.IOException;
+import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -1148,6 +1149,19 @@ public class TableIndexManagerImpl implements TableIndexManager {
 		});
 	}
 	
+	@Override
+	public void populateIndexFromDefiningSql(List<ColumnModel> schema, QueryTranslator definingSql,
+			int queryTimeoutSeconds) {
+		String insertSql = SQLTranslatorUtils.createMaterializedViewInsertSql(schema, definingSql.getOutputSQL(),
+				definingSql.getIndexDescription());
+		tableIndexDao.update(insertSql, definingSql.getParameters(), queryTimeoutSeconds);
+	}
+
+	@Override
+	public List<String> getIndexTableNamesCreatedBefore(String tableNamePrefix, Timestamp createdBefore) {
+		return tableIndexDao.getTableNamesCreatedBefore(tableNamePrefix, createdBefore);
+	}
+
 	@Override
 	public long getVersionFromIndexDependencies(QueryIndexDescription index) {
 		return index.getDependencies().stream()

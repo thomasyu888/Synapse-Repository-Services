@@ -386,6 +386,8 @@ import org.sagebionetworks.repo.model.search.table.SearchAutocompleteRequest;
 import org.sagebionetworks.repo.model.search.table.SearchConfigBinding;
 import org.sagebionetworks.repo.model.search.table.SearchConfiguration;
 import org.sagebionetworks.repo.model.search.table.SearchIndexQuery;
+import org.sagebionetworks.repo.model.table.SqlQueryRequest;
+import org.sagebionetworks.repo.model.table.SqlQueryResponse;
 import org.sagebionetworks.repo.model.search.table.SynonymSet;
 import org.sagebionetworks.repo.model.search.table.TextAnalyzer;
 import org.sagebionetworks.repo.model.statistics.ObjectStatisticsRequest;
@@ -7069,6 +7071,19 @@ public class SynapseClientImpl extends BaseClientImpl implements SynapseClient {
 	public SearchQueryResults getSearchIndexQueryResults(String asyncJobToken) throws SynapseException, SynapseResultNotReadyException {
 		ValidateArgument.required(asyncJobToken, "asyncJobToken");
 		return (SearchQueryResults) getAsyncResult(AsynchJobType.SearchIndexQuery, asyncJobToken, (String) null);
+	}
+
+	@Override
+	public String startSqlQuery(SqlQueryRequest request) throws SynapseException {
+		ValidateArgument.required(request, "request");
+		return startAsynchJob(AsynchJobType.SqlQuery, request);
+	}
+
+	@Override
+	public SqlQueryResponse getSqlQueryResults(String asyncJobToken)
+			throws SynapseException, SynapseResultNotReadyException {
+		ValidateArgument.required(asyncJobToken, "asyncJobToken");
+		return (SqlQueryResponse) getAsyncResult(AsynchJobType.SqlQuery, asyncJobToken, (String) null);
 	}
 
 }

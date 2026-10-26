@@ -192,6 +192,7 @@
 
 		<!-- Search Index -->
 		<ref bean="searchQueryWorkerTrigger"/>
+		<ref bean="sqlQueryWorkerTrigger"/>
 		<ref bean="searchIndexLifecycleWorkerTrigger"/>
 
 		<!-- Curation compute task execution -->

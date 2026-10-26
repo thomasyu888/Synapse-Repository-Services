@@ -30,6 +30,7 @@ import org.sagebionetworks.repo.model.table.Dataset;
 import org.sagebionetworks.repo.model.table.DatasetCollection;
 import org.sagebionetworks.repo.model.table.EntityView;
 import org.sagebionetworks.repo.model.table.MaterializedView;
+import org.sagebionetworks.repo.model.table.SqlWorksheet;
 import org.sagebionetworks.repo.model.table.SubmissionView;
 import org.sagebionetworks.repo.model.table.TableEntity;
 import org.sagebionetworks.repo.model.table.VirtualTable;
@@ -88,7 +89,8 @@ public class SynapseSchemaBootstrapImpl implements SynapseSchemaBootstrap {
 			DockerRepository.class.getName(),
 			Link.class.getName(),
 			RecordSet.class.getName(),
-			SearchIndex.class.getName()
+			SearchIndex.class.getName(),
+			SqlWorksheet.class.getName()
 	);
 
 	@Autowired

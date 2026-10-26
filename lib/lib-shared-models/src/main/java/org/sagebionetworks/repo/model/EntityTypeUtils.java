@@ -16,6 +16,7 @@ import org.sagebionetworks.repo.model.table.Dataset;
 import org.sagebionetworks.repo.model.table.DatasetCollection;
 import org.sagebionetworks.repo.model.table.EntityView;
 import org.sagebionetworks.repo.model.table.MaterializedView;
+import org.sagebionetworks.repo.model.table.SqlWorksheet;
 import org.sagebionetworks.repo.model.table.SubmissionView;
 import org.sagebionetworks.repo.model.table.TableEntity;
 import org.sagebionetworks.repo.model.table.VirtualTable;
@@ -75,7 +76,9 @@ public class EntityTypeUtils {
 				// virtual table
 				buildMetadata(EntityType.virtualtable, Arrays.asList(Project.class.getName(), Folder.class.getName()), VirtualTable.class, "Virtual Table"),
 				// search index
-				buildMetadata(EntityType.searchindex, Arrays.asList(Project.class.getName(), Folder.class.getName()), SearchIndex.class, "Search Index")
+				buildMetadata(EntityType.searchindex, Arrays.asList(Project.class.getName(), Folder.class.getName()), SearchIndex.class, "Search Index"),
+				// SQL worksheet
+				buildMetadata(EntityType.sqlworksheet, Arrays.asList(Project.class.getName(), Folder.class.getName()), SqlWorksheet.class, "SQL Worksheet")
 
 		};
 
@@ -94,6 +97,7 @@ public class EntityTypeUtils {
 		className.put(VirtualTable.class.getName(), VirtualTable.class);
 		className.put(RecordSet.class.getName(), RecordSet.class);
 		className.put(SearchIndex.class.getName(), SearchIndex.class);
+		className.put(SqlWorksheet.class.getName(), SqlWorksheet.class);
 
 		fileTypes = new ArrayList<>();
 

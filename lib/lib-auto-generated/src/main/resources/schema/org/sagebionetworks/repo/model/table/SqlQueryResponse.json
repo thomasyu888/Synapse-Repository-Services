@@ -1,0 +1,18 @@
+{
+	"description": "The first rows of SQL run with a <a href=\"${org.sagebionetworks.repo.model.table.SqlQueryRequest}\">SqlQueryRequest</a>.",
+	"implements": [
+		{
+			"$ref": "org.sagebionetworks.repo.model.asynch.AsynchronousResponseBody"
+		}
+	],
+	"properties": {
+		"rowSet": {
+			"description": "The rows. Its headers describe the selected columns; it has no tableId, as the result belongs to no table.",
+			"$ref": "org.sagebionetworks.repo.model.table.RowSet"
+		},
+		"isTruncated": {
+			"type": "boolean",
+			"description": "True when the SQL has more rows than were returned. To get all of them, save the SQL as a materialized view and query it."
+		}
+	}
+}

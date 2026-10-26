@@ -27,19 +27,12 @@ import com.google.common.collect.ImmutableMap;
 @Repository
 public class DefiningSqlDependencyDaoImpl implements DefiningSqlDependencyDao {
 
-	private static final RowMapper<IdAndVersion> ID_AND_VERSION_MAPPER = (rs, i) -> {
+	private static final RowMapper<IdAndVersion> ID_AND_VERSION_MAPPER = (rs, i) -> toIdAndVersion(rs.getLong(1),
+			rs.getLong(2));
 
-		Long id = rs.getLong(1);
-		Long version = rs.getLong(2);
-
-		IdAndVersionBuilder builder = IdAndVersion.newBuilder().setId(id);
-
-		if (!DEFAULT_VERSION.equals(version)) {
-			builder.setVersion(version);
-		}
-
-		return builder.build();
-	};
+	private static final RowMapper<Dependency> DEPENDENCY_MAPPER = (rs, i) -> new Dependency(
+			toIdAndVersion(rs.getLong("OBJECT_ID"), rs.getLong("OBJECT_VERSION")),
+			toIdAndVersion(rs.getLong("SOURCE_TABLE_ID"), rs.getLong("SOURCE_TABLE_VERSION")));
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
 
@@ -167,6 +160,49 @@ public class DefiningSqlDependencyDaoImpl implements DefiningSqlDependencyDao {
 						+ " LIMIT ? OFFSET ?",
 				(rs, i) -> new DependentObject(ID_AND_VERSION_MAPPER.mapRow(rs, i), rs.getString("OBJECT_TYPE")),
 				sourceTableId.getId(), sourceTableId.getVersion().orElse(DEFAULT_VERSION), limit, offset);
+	}
+
+	@Override
+	public List<Dependency> getSourceTablesOfObjects(Set<IdAndVersion> objectIds) {
+		ValidateArgument.required(objectIds, "objectIds");
+
+		if (objectIds.isEmpty()) {
+			return List.of();
+		}
+
+		return jdbcTemplate.query(
+				"SELECT OBJECT_ID, OBJECT_VERSION, SOURCE_TABLE_ID, SOURCE_TABLE_VERSION FROM DEFINING_SQL_DEPENDENCY"
+						+ " WHERE (OBJECT_ID, OBJECT_VERSION) IN (:idAndVersionList)"
+						+ " ORDER BY OBJECT_ID, OBJECT_VERSION, SOURCE_TABLE_ID, SOURCE_TABLE_VERSION",
+				Map.of("idAndVersionList", toIdAndVersionList(objectIds)), DEPENDENCY_MAPPER);
+	}
+
+	@Override
+	public List<Dependency> getDependentsOfSources(Set<IdAndVersion> sourceTableIds, long limit) {
+		ValidateArgument.required(sourceTableIds, "sourceTableIds");
+
+		if (sourceTableIds.isEmpty()) {
+			return List.of();
+		}
+
+		return jdbcTemplate.query(
+				"SELECT OBJECT_ID, OBJECT_VERSION, SOURCE_TABLE_ID, SOURCE_TABLE_VERSION FROM DEFINING_SQL_DEPENDENCY"
+						+ " WHERE (SOURCE_TABLE_ID, SOURCE_TABLE_VERSION) IN (:idAndVersionList)"
+						+ " ORDER BY SOURCE_TABLE_ID, SOURCE_TABLE_VERSION, OBJECT_ID, OBJECT_VERSION LIMIT :limit",
+				Map.of("idAndVersionList", toIdAndVersionList(sourceTableIds), "limit", limit), DEPENDENCY_MAPPER);
+	}
+
+	private static IdAndVersion toIdAndVersion(Long id, Long version) {
+		IdAndVersionBuilder builder = IdAndVersion.newBuilder().setId(id);
+		if (!DEFAULT_VERSION.equals(version)) {
+			builder.setVersion(version);
+		}
+		return builder.build();
+	}
+
+	private static List<Long[]> toIdAndVersionList(Set<IdAndVersion> ids) {
+		return ids.stream().map(id -> new Long[] { id.getId(), id.getVersion().orElse(DEFAULT_VERSION) })
+				.collect(Collectors.toList());
 	}
 
 }

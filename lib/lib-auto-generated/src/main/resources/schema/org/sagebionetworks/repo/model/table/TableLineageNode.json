@@ -29,6 +29,10 @@
 		"errorMessage": {
 			"type": "string",
 			"description": "When tableState is PROCESSING_FAILED, the reason the index could not be built."
+		},
+		"isStale": {
+			"type": "boolean",
+			"description": "True when the object is AVAILABLE but one of its sources in this graph changed after it was last built, or is being rebuilt, or is itself stale: the object will be rebuilt and its index does not yet reflect that change. Only sources the caller can read are considered. Only included with tableState."
 		}
 	}
 }

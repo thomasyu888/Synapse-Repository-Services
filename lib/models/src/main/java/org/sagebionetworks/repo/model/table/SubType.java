@@ -20,5 +20,6 @@ public enum SubType {
 	materializedview,
 	virtualtable,
 	recordset,
-	searchindex
+	searchindex,
+	sqlworksheet
 }

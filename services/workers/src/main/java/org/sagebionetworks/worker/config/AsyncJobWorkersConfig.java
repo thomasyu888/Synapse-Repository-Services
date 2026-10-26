@@ -34,6 +34,7 @@ import org.sagebionetworks.table.worker.PFBDownloadWorker;
 import org.sagebionetworks.table.worker.TableCSVAppenderPreviewWorker;
 import org.sagebionetworks.table.worker.TableCSVDownloadWorker;
 import org.sagebionetworks.table.worker.TableQueryNextPageWorker;
+import org.sagebionetworks.table.worker.SqlQueryWorker;
 import org.sagebionetworks.table.worker.TableQueryWorker;
 import org.sagebionetworks.table.worker.TableUpdateRequestWorker;
 import org.sagebionetworks.table.worker.ViewColumnModelRequestWorker;
@@ -776,6 +777,33 @@ public class AsyncJobWorkersConfig {
 				)
 				.withRepeatInterval(2039)
 				.withStartDelay(317)
+				.build();
+	}
+
+	/**
+	 * Running SQL builds its whole result while holding read locks on the sources, so few run at once, apart from the
+	 * table query workers every table page depends on.
+	 */
+	@Bean
+	public SimpleTriggerFactoryBean sqlQueryWorkerTrigger(ConcurrentManager concurrentStackManager, SqlQueryWorker sqlQueryWorker) {
+
+		String queueName = stackConfig.getQueueName("SQL_QUERY");
+		MessageDrivenRunner worker = new AsyncJobRunnerAdapter<>(jobStatusManager, userManager, sqlQueryWorker);
+
+		return new WorkerTriggerBuilder()
+				.withStack(ConcurrentWorkerStack.builder()
+						.withSemaphoreLockKey("sqlQueryWorker")
+						.withSemaphoreMaxLockCount(4)
+						.withSemaphoreLockAndMessageVisibilityTimeoutSec(120)
+						.withMaxThreadsPerMachine(1)
+						.withSingleton(concurrentStackManager)
+						.withCanRunInReadOnly(false)
+						.withQueueName(queueName)
+						.withWorker(worker)
+						.build()
+				)
+				.withRepeatInterval(2111)
+				.withStartDelay(431)
 				.build();
 	}
 

@@ -2,7 +2,9 @@ package org.sagebionetworks.repo.model.dao.table;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.sagebionetworks.repo.model.ConflictingUpdateException;
 import org.sagebionetworks.repo.model.IdVersionTableType;
@@ -98,6 +100,15 @@ public interface TableStatusDAO {
 	 *                           given table.
 	 */
 	public TableStatus getTableStatus(IdAndVersion tableId) throws NotFoundException;
+
+	/**
+	 * Get the current status of several tables in one query.
+	 * 
+	 * @param tableIds
+	 * @return The status of each given table that has one, keyed by table; a table with no status information is
+	 *         left out
+	 */
+	Map<IdAndVersion, TableStatus> getTableStatuses(Set<IdAndVersion> tableIds);
 
 	/**
 	 * Get the current state of the given table.

@@ -327,4 +327,79 @@ public class DefiningSqlDependencyDaoImplTest {
 				dao.getDependentsPage(sourceTableId, 1, 1));
 	}
 
+	@Test
+	public void testGetSourceTablesOfObjects() {
+		String otherNodeId = nodeHelper.create(node -> node.setNodeType(EntityType.materializedview)).getId();
+		IdAndVersion otherViewId = KeyFactory.idAndVersion(otherNodeId, null);
+		String decoyNodeId = nodeHelper.create(node -> node.setNodeType(EntityType.materializedview)).getId();
+		IdAndVersion decoyViewId = KeyFactory.idAndVersion(decoyNodeId, null);
+
+		dao.addSourceTables(viewId, MV_TYPE, ImmutableSet.of(IdAndVersion.parse("syn456"), IdAndVersion.parse("syn123.2")));
+		dao.addSourceTables(otherViewId, MV_TYPE, ImmutableSet.of(IdAndVersion.parse("syn123")));
+		dao.addSourceTables(decoyViewId, MV_TYPE, ImmutableSet.of(IdAndVersion.parse("syn789")));
+
+		// Call under test
+		List<DefiningSqlDependencyDao.Dependency> result = dao.getSourceTablesOfObjects(Set.of(viewId, otherViewId));
+
+		// Ordered by object (viewId was created first), then source.
+		assertEquals(Arrays.asList(
+				new DefiningSqlDependencyDao.Dependency(viewId, IdAndVersion.parse("syn123.2")),
+				new DefiningSqlDependencyDao.Dependency(viewId, IdAndVersion.parse("syn456")),
+				new DefiningSqlDependencyDao.Dependency(otherViewId, IdAndVersion.parse("syn123"))), result);
+	}
+
+	@Test
+	public void testGetSourceTablesOfObjectsWithEmptySet() {
+		dao.addSourceTables(viewId, MV_TYPE, ImmutableSet.of(IdAndVersion.parse("syn123")));
+
+		// Call under test
+		assertEquals(Collections.emptyList(), dao.getSourceTablesOfObjects(Set.of()));
+	}
+
+	@Test
+	public void testGetDependentsOfSources() {
+		String searchNodeId = nodeHelper.create(node -> node.setNodeType(EntityType.searchindex)).getId();
+		IdAndVersion searchIndexId = KeyFactory.idAndVersion(searchNodeId, null);
+		String decoyNodeId = nodeHelper.create(node -> node.setNodeType(EntityType.materializedview)).getId();
+		IdAndVersion decoyViewId = KeyFactory.idAndVersion(decoyNodeId, null);
+
+		IdAndVersion sourceOne = IdAndVersion.parse("syn123");
+		IdAndVersion sourceTwo = IdAndVersion.parse("syn456.3");
+		dao.addSourceTables(viewId, MV_TYPE, ImmutableSet.of(sourceOne, sourceTwo));
+		dao.addSourceTables(searchIndexId, SEARCH_TYPE, ImmutableSet.of(sourceOne));
+		// A different version of a requested source is a different source.
+		dao.addSourceTables(decoyViewId, MV_TYPE, ImmutableSet.of(IdAndVersion.parse("syn456")));
+
+		// Call under test
+		List<DefiningSqlDependencyDao.Dependency> result = dao.getDependentsOfSources(Set.of(sourceOne, sourceTwo), 10);
+
+		// Ordered by source, then object.
+		assertEquals(Arrays.asList(
+				new DefiningSqlDependencyDao.Dependency(viewId, sourceOne),
+				new DefiningSqlDependencyDao.Dependency(searchIndexId, sourceOne),
+				new DefiningSqlDependencyDao.Dependency(viewId, sourceTwo)), result);
+	}
+
+	@Test
+	public void testGetDependentsOfSourcesWithLimit() {
+		String searchNodeId = nodeHelper.create(node -> node.setNodeType(EntityType.searchindex)).getId();
+		IdAndVersion searchIndexId = KeyFactory.idAndVersion(searchNodeId, null);
+		IdAndVersion source = IdAndVersion.parse("syn123");
+		dao.addSourceTables(viewId, MV_TYPE, ImmutableSet.of(source));
+		dao.addSourceTables(searchIndexId, SEARCH_TYPE, ImmutableSet.of(source));
+
+		// Call under test
+		List<DefiningSqlDependencyDao.Dependency> result = dao.getDependentsOfSources(Set.of(source), 1);
+
+		assertEquals(Arrays.asList(new DefiningSqlDependencyDao.Dependency(viewId, source)), result);
+	}
+
+	@Test
+	public void testGetDependentsOfSourcesWithEmptySet() {
+		dao.addSourceTables(viewId, MV_TYPE, ImmutableSet.of(IdAndVersion.parse("syn123")));
+
+		// Call under test
+		assertEquals(Collections.emptyList(), dao.getDependentsOfSources(Set.of(), 10));
+	}
+
 }

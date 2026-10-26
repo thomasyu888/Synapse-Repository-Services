@@ -2,11 +2,11 @@ package org.sagebionetworks.repo.manager.table;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -20,6 +20,7 @@ import org.sagebionetworks.repo.model.UnauthorizedException;
 import org.sagebionetworks.repo.model.UserInfo;
 import org.sagebionetworks.repo.model.dao.table.TableStatusDAO;
 import org.sagebionetworks.repo.model.dbo.dao.table.DefiningSqlDependencyDao;
+import org.sagebionetworks.repo.model.dbo.dao.table.DefiningSqlDependencyDao.Dependency;
 import org.sagebionetworks.repo.model.entity.IdAndVersion;
 import org.sagebionetworks.repo.model.jdo.KeyFactory;
 import org.sagebionetworks.repo.model.table.LineageAccess;
@@ -27,9 +28,9 @@ import org.sagebionetworks.repo.model.table.LineageDirection;
 import org.sagebionetworks.repo.model.table.TableLineage;
 import org.sagebionetworks.repo.model.table.TableLineageEdge;
 import org.sagebionetworks.repo.model.table.TableLineageNode;
+import org.sagebionetworks.repo.model.table.TableState;
 import org.sagebionetworks.repo.model.table.TableStatus;
 import org.sagebionetworks.repo.web.NotFoundException;
-import org.sagebionetworks.util.PaginationIterator;
 import org.sagebionetworks.util.ValidateArgument;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -49,8 +50,6 @@ public class TableLineageManager {
 	 * The maximum number of nodes in a single lineage graph, the root included.
 	 */
 	public static final int MAX_NODES = 500;
-
-	private static final long DEPENDENTS_PAGE_SIZE = 1000;
 
 	private static final Comparator<IdAndVersion> ID_ORDER = Comparator.comparing(IdAndVersion::getId)
 			.thenComparing(id -> id.getVersion().orElse(-1L));
@@ -112,21 +111,26 @@ public class TableLineageManager {
 	}
 
 	/**
-	 * Breadth-first walk from the root in one direction. Each level's new nodes are access-checked together, and only
-	 * the readable ones are expanded, so the graph never reveals what lies beyond an object the caller cannot read.
+	 * Breadth-first walk from the root in one direction. Each level's edges are read together and its new nodes are
+	 * access-checked together, and only the readable ones are expanded, so the graph never reveals what lies beyond an
+	 * object the caller cannot read.
 	 */
-	void walk(UserInfo userInfo, LineageGraph graph, int maxDepth, Function<IdAndVersion, List<Edge>> edgesOf) {
+	void walk(UserInfo userInfo, LineageGraph graph, int maxDepth, Function<Set<IdAndVersion>, Level> edgesOf) {
 		List<IdAndVersion> frontier = List.of(graph.rootId);
 		for (int depth = 0; !frontier.isEmpty(); depth++) {
+			Level level = edgesOf.apply(new LinkedHashSet<>(frontier));
 			if (depth == maxDepth) {
-				if (frontier.stream().anyMatch(id -> !edgesOf.apply(id).isEmpty())) {
+				if (!level.edges().isEmpty()) {
 					graph.truncated = true;
 				}
 				return;
 			}
+			if (level.isIncomplete()) {
+				graph.truncated = true;
+			}
 			List<IdAndVersion> discovered = new ArrayList<>();
 			for (IdAndVersion id : frontier) {
-				for (Edge edge : edgesOf.apply(id)) {
+				for (Edge edge : level.edges().getOrDefault(id, List.of())) {
 					if (!graph.access.containsKey(edge.neighbor)) {
 						if (graph.access.size() >= MAX_NODES) {
 							graph.truncated = true;
@@ -144,18 +148,32 @@ public class TableLineageManager {
 		}
 	}
 
-	List<Edge> getUpstreamEdges(IdAndVersion dependentId) {
-		return definingSqlDependencyDao.getSourceTables(dependentId).stream().sorted(ID_ORDER)
-				.map(sourceId -> new Edge(sourceId, edge(sourceId, dependentId))).collect(Collectors.toList());
+	Level getUpstreamEdges(Set<IdAndVersion> dependentIds) {
+		Map<IdAndVersion, List<Edge>> edges = new HashMap<>();
+		for (Dependency dependency : definingSqlDependencyDao.getSourceTablesOfObjects(dependentIds)) {
+			edges.computeIfAbsent(dependency.objectId(), k -> new ArrayList<>()).add(new Edge(
+					dependency.sourceTableId(), edge(dependency.sourceTableId(), dependency.objectId())));
+		}
+		return new Level(sortByNeighbor(edges), false);
 	}
 
-	List<Edge> getDownstreamEdges(IdAndVersion sourceId) {
-		List<Edge> edges = new ArrayList<>();
-		new PaginationIterator<>(
-				(limit, offset) -> definingSqlDependencyDao.getDependentsPage(sourceId, limit, offset),
-				DEPENDENTS_PAGE_SIZE)
-				.forEachRemaining(dependent -> edges.add(new Edge(dependent.objectId(), edge(sourceId, dependent.objectId()))));
-		edges.sort(Comparator.comparing(e -> e.neighbor, ID_ORDER));
+	/**
+	 * A source table can have any number of dependents, while a graph holds at most {@link #MAX_NODES}, so one more
+	 * dependency than that is read per level: reading more cannot add a node, and reading one more shows that some
+	 * were left out.
+	 */
+	Level getDownstreamEdges(Set<IdAndVersion> sourceIds) {
+		List<Dependency> dependents = definingSqlDependencyDao.getDependentsOfSources(sourceIds, MAX_NODES + 1);
+		Map<IdAndVersion, List<Edge>> edges = new HashMap<>();
+		for (Dependency dependency : dependents) {
+			edges.computeIfAbsent(dependency.sourceTableId(), k -> new ArrayList<>()).add(new Edge(
+					dependency.objectId(), edge(dependency.sourceTableId(), dependency.objectId())));
+		}
+		return new Level(sortByNeighbor(edges), dependents.size() > MAX_NODES);
+	}
+
+	private static Map<IdAndVersion, List<Edge>> sortByNeighbor(Map<IdAndVersion, List<Edge>> edges) {
+		edges.values().forEach(list -> list.sort(Comparator.comparing(Edge::neighbor, ID_ORDER)));
 		return edges;
 	}
 
@@ -190,29 +208,70 @@ public class TableLineageManager {
 			graph.headers.putAll(nodeDao.getEntityHeader(Set.of(graph.rootId.getId())).stream()
 					.collect(Collectors.toMap(h -> KeyFactory.stringToKey(h.getId()), Function.identity())));
 		}
+		// An object has no status until its index is first requested, so not every readable node has one.
+		Set<IdAndVersion> readableIds = graph.access.entrySet().stream()
+				.filter(entry -> entry.getValue() == LineageAccess.READABLE).map(Map.Entry::getKey)
+				.collect(Collectors.toCollection(LinkedHashSet::new));
+		Map<IdAndVersion, TableStatus> statuses = tableStatusDao.getTableStatuses(readableIds);
+		Map<IdAndVersion, List<IdAndVersion>> readableSources = graph.edges.stream()
+				.map(edge -> new Dependency(IdAndVersion.parse(edge.getDependentId()),
+						IdAndVersion.parse(edge.getSourceId())))
+				.filter(dependency -> readableIds.contains(dependency.sourceTableId()))
+				.collect(Collectors.groupingBy(Dependency::objectId,
+						Collectors.mapping(Dependency::sourceTableId, Collectors.toList())));
+		Map<IdAndVersion, Boolean> staleness = new HashMap<>();
 		List<TableLineageNode> nodes = new ArrayList<>(graph.access.size());
-		graph.access.forEach((id, access) -> nodes.add(createNode(id, access, graph.headers.get(id.getId()))));
+		graph.access.forEach((id, access) -> nodes.add(createNode(id, access, graph.headers.get(id.getId()),
+				statuses.get(id), isStale(readableSources, statuses, staleness, id))));
 		return nodes;
 	}
 
-	TableLineageNode createNode(IdAndVersion id, LineageAccess access, EntityHeader header) {
+	TableLineageNode createNode(IdAndVersion id, LineageAccess access, EntityHeader header, TableStatus status,
+			boolean isStale) {
 		TableLineageNode node = new TableLineageNode().setId(id.toString()).setAccess(access);
 		if (access != LineageAccess.READABLE) {
 			return node;
 		}
 		node.setName(header.getName()).setConcreteType(header.getType());
-		getTableStatus(id).ifPresent(status -> node.setTableState(status.getState())
-				.setStateChangedOn(status.getChangedOn()).setErrorMessage(status.getErrorMessage()));
+		if (status != null) {
+			node.setTableState(status.getState()).setStateChangedOn(status.getChangedOn())
+					.setErrorMessage(status.getErrorMessage()).setIsStale(isStale);
+		}
 		return node;
 	}
 
-	Optional<TableStatus> getTableStatus(IdAndVersion id) {
-		try {
-			return Optional.of(tableStatusDao.getTableStatus(id));
-		} catch (NotFoundException e) {
-			// An object has no status until its index is first requested.
-			return Optional.empty();
+	/**
+	 * Whether an AVAILABLE object is due a rebuild, judged from the sources in the graph alone: a source that changed
+	 * after the object was built, that is being rebuilt, or that is itself stale will make the object rebuild. A view
+	 * stays AVAILABLE while it rebuilds, so this is the only sign of a change still travelling downstream.
+	 */
+	boolean isStale(Map<IdAndVersion, List<IdAndVersion>> readableSources, Map<IdAndVersion, TableStatus> statuses,
+			Map<IdAndVersion, Boolean> staleness, IdAndVersion id) {
+		Boolean known = staleness.get(id);
+		if (known != null) {
+			return known;
 		}
+		// Recorded dependencies cannot form a cycle, but the walk does not rely on it: an object being decided is
+		// treated as not stale should it be reached again.
+		staleness.put(id, false);
+		TableStatus status = statuses.get(id);
+		boolean stale = status != null && status.getState() == TableState.AVAILABLE
+				&& readableSources.getOrDefault(id, List.of()).stream()
+						.anyMatch(sourceId -> isSourceAhead(statuses.get(sourceId), status)
+								|| isStale(readableSources, statuses, staleness, sourceId));
+		staleness.put(id, stale);
+		return stale;
+	}
+
+	private static boolean isSourceAhead(TableStatus source, TableStatus dependent) {
+		if (source == null) {
+			return false;
+		}
+		if (source.getState() == TableState.PROCESSING) {
+			return true;
+		}
+		return source.getState() == TableState.AVAILABLE && source.getChangedOn() != null
+				&& dependent.getChangedOn() != null && source.getChangedOn().after(dependent.getChangedOn());
 	}
 
 	private static TableLineageEdge edge(IdAndVersion sourceId, IdAndVersion dependentId) {
@@ -223,6 +282,12 @@ public class TableLineageManager {
 	 * An edge reached while walking, with the node at its far end.
 	 */
 	record Edge(IdAndVersion neighbor, TableLineageEdge edge) {}
+
+	/**
+	 * The edges of one level of the walk, keyed by the frontier node they start from, each list in neighbor order.
+	 * isIncomplete is set when some edges were left out.
+	 */
+	record Level(Map<IdAndVersion, List<Edge>> edges, boolean isIncomplete) {}
 
 	/**
 	 * The graph built so far. A node's access is null between its discovery and the access check of its level.

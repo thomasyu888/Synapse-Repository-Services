@@ -342,6 +342,8 @@ import org.sagebionetworks.repo.model.search.table.SearchAutocompleteRequest;
 import org.sagebionetworks.repo.model.search.table.SearchConfigBinding;
 import org.sagebionetworks.repo.model.search.table.SearchConfiguration;
 import org.sagebionetworks.repo.model.search.table.SearchIndexQuery;
+import org.sagebionetworks.repo.model.table.SqlQueryRequest;
+import org.sagebionetworks.repo.model.table.SqlQueryResponse;
 import org.sagebionetworks.repo.model.search.table.SynonymSet;
 import org.sagebionetworks.repo.model.search.table.TextAnalyzer;
 import org.sagebionetworks.repo.model.statistics.ObjectStatisticsRequest;
@@ -4996,6 +4998,22 @@ public interface SynapseClient extends BaseClient {
 	String startSearchIndexQuery(SearchIndexQuery request) throws SynapseException;
 
 	SearchQueryResults getSearchIndexQueryResults(String asyncJobToken) throws SynapseException, SynapseResultNotReadyException;
+
+	/**
+	 * Start running SQL that may combine several tables and views.
+	 * 
+	 * @param request
+	 * @return The token of the job
+	 * @throws SynapseException
+	 */
+	String startSqlQuery(SqlQueryRequest request) throws SynapseException;
+
+	/**
+	 * @param asyncJobToken The token from {@link #startSqlQuery(SqlQueryRequest)}
+	 * @return The first rows of the SQL
+	 * @throws SynapseResultNotReadyException When the job is still running
+	 */
+	SqlQueryResponse getSqlQueryResults(String asyncJobToken) throws SynapseException, SynapseResultNotReadyException;
 
 }
 

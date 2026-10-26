@@ -55,6 +55,8 @@ import org.sagebionetworks.repo.model.table.DownloadFromTableResult;
 import org.sagebionetworks.repo.model.table.DownloadPFBRequest;
 import org.sagebionetworks.repo.model.table.DownloadPFBResult;
 import org.sagebionetworks.repo.model.table.QueryBundleRequest;
+import org.sagebionetworks.repo.model.table.SqlQueryRequest;
+import org.sagebionetworks.repo.model.table.SqlQueryResponse;
 import org.sagebionetworks.repo.model.table.QueryNextPageToken;
 import org.sagebionetworks.repo.model.table.QueryResult;
 import org.sagebionetworks.repo.model.table.QueryResultBundle;
@@ -144,7 +146,9 @@ public enum AsynchJobType {
 
 	COMPUTE_TASK_EXECUTION(ComputeTaskExecutionRequest.class, ComputeTaskExecutionResponse.class),
 
-	SEARCH_QUERY(SearchIndexQuery.class, SearchQueryResults.class);
+	SEARCH_QUERY(SearchIndexQuery.class, SearchQueryResults.class),
+
+	SQL_QUERY(SqlQueryRequest.class, SqlQueryResponse.class);
 
 	private final Class<? extends AsynchronousRequestBody> requestClass;
 	private final Class<? extends AsynchronousResponseBody> responseClass;

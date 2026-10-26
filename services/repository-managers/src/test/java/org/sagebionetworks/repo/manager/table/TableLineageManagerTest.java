@@ -9,6 +9,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -40,7 +42,7 @@ import org.sagebionetworks.repo.model.UserInfo;
 import org.sagebionetworks.repo.model.auth.AuthorizationStatus;
 import org.sagebionetworks.repo.model.dao.table.TableStatusDAO;
 import org.sagebionetworks.repo.model.dbo.dao.table.DefiningSqlDependencyDao;
-import org.sagebionetworks.repo.model.dbo.dao.table.DefiningSqlDependencyDao.DependentObject;
+import org.sagebionetworks.repo.model.dbo.dao.table.DefiningSqlDependencyDao.Dependency;
 import org.sagebionetworks.repo.model.entity.IdAndVersion;
 import org.sagebionetworks.repo.model.jdo.KeyFactory;
 import org.sagebionetworks.repo.model.table.LineageAccess;
@@ -50,7 +52,6 @@ import org.sagebionetworks.repo.model.table.TableLineageEdge;
 import org.sagebionetworks.repo.model.table.TableLineageNode;
 import org.sagebionetworks.repo.model.table.TableState;
 import org.sagebionetworks.repo.model.table.TableStatus;
-import org.sagebionetworks.repo.web.NotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 public class TableLineageManagerTest {
@@ -211,7 +212,7 @@ public class TableLineageManagerTest {
 	public void testGetLineageWithNoDependencies() {
 		addEntity(10, "standalone", TABLE, true);
 		setupRootAccess();
-		when(mockDefiningSqlDependencyDao.getSourceTables(any())).thenReturn(Set.of());
+		when(mockDefiningSqlDependencyDao.getSourceTablesOfObjects(anySet())).thenReturn(List.of());
 		setupDownstreamDao();
 		setupHeaders();
 		setupStatuses();
@@ -244,15 +245,16 @@ public class TableLineageManagerTest {
 	public void testGetLineageWithMoreThanMaxNodes() {
 		IdAndVersion root = IdAndVersion.parse("syn1000");
 		addEntity(1000, "wide", TABLE, true);
-		List<DependentObject> dependents = LongStream.rangeClosed(1001, 1600).mapToObj(id -> {
+		List<Dependency> dependents = LongStream.rangeClosed(1001, 1600).mapToObj(id -> {
 			addEntity(id, "view " + id, MATERIALIZED_VIEW, true);
-			return new DependentObject(IdAndVersion.newBuilder().setId(id).build(), "MATERIALIZED_VIEW");
+			return new Dependency(IdAndVersion.newBuilder().setId(id).build(), root);
 		}).collect(Collectors.toList());
 		when(mockEntityAuthorizationManager.hasAccess(user, "1000", ACCESS_TYPE.READ))
 				.thenReturn(AuthorizationStatus.authorized());
-		when(mockDefiningSqlDependencyDao.getDependentsPage(any(), anyLong(), anyLong())).thenAnswer(invocation -> {
-			long offset = invocation.getArgument(2);
-			return root.equals(invocation.getArgument(0)) && offset == 0 ? dependents : List.of();
+		when(mockDefiningSqlDependencyDao.getDependentsOfSources(anySet(), anyLong())).thenAnswer(invocation -> {
+			Set<IdAndVersion> sourceIds = invocation.getArgument(0);
+			long limit = invocation.getArgument(1);
+			return sourceIds.contains(root) ? dependents.subList(0, (int) limit) : List.of();
 		});
 		setupEntities();
 		setupStatuses();
@@ -263,6 +265,51 @@ public class TableLineageManagerTest {
 		assertEquals(TableLineageManager.MAX_NODES, result.getNodes().size());
 		assertEquals(TableLineageManager.MAX_NODES - 1, result.getEdges().size());
 		assertTrue(result.getIsTruncated());
+		// A hub's dependents are read only up to what the graph can hold.
+		verify(mockDefiningSqlDependencyDao).getDependentsOfSources(Set.of(root), TableLineageManager.MAX_NODES + 1);
+	}
+
+	@Test
+	public void testGetLineageWithOneReadPerLevel() {
+		setupGraph();
+
+		// call under test
+		manager.getLineage(user, IdAndVersion.parse("syn3"), LineageDirection.BOTH, null);
+
+		// Upstream: syn3, then syn2, then syn1 (syn5 is restricted, syn9 deleted, so neither is expanded), which has
+		// none. Downstream: syn3, syn4, then syn6, which has none. Statuses for the whole graph at once.
+		verify(mockDefiningSqlDependencyDao, times(3)).getSourceTablesOfObjects(anySet());
+		verify(mockDefiningSqlDependencyDao, times(3)).getDependentsOfSources(anySet(), anyLong());
+		verify(mockTableStatusDao, times(1)).getTableStatuses(anySet());
+	}
+
+	@Test
+	public void testGetLineageWithStaleViews() {
+		Date later = new Date(changedOn.getTime() + 1000);
+		// participants changed after joined was built; joined has not rebuilt yet, so cohort is behind too.
+		addStatus(IdAndVersion.parse("syn1"), TableState.AVAILABLE, null);
+		statuses.get(IdAndVersion.parse("syn1")).setChangedOn(later);
+		addStatus(IdAndVersion.parse("syn4"), TableState.AVAILABLE, null);
+		setupGraph();
+
+		// call under test
+		TableLineage result = manager.getLineage(user, IdAndVersion.parse("syn3"), LineageDirection.BOTH, null);
+
+		// syn6 failed, so it is not AVAILABLE and not stale; its source syn4 is.
+		assertEquals(Map.of("syn1", false, "syn2", true, "syn3", true, "syn4", true, "syn6", false),
+				getStaleness(result));
+	}
+
+	@Test
+	public void testGetLineageWithSourceProcessing() {
+		addStatus(IdAndVersion.parse("syn1"), TableState.PROCESSING, null);
+		setupUpstream();
+
+		// call under test
+		TableLineage result = manager.getLineage(user, IdAndVersion.parse("syn3"), LineageDirection.UPSTREAM, null);
+
+		// participants is being rebuilt, so joined will rebuild after it, and cohort after joined.
+		assertEquals(Map.of("syn1", false, "syn2", true, "syn3", true), getStaleness(result));
 	}
 
 	@Test
@@ -342,8 +389,14 @@ public class TableLineageManagerTest {
 
 	private void setupUpstream() {
 		setupRootAccess();
-		when(mockDefiningSqlDependencyDao.getSourceTables(any()))
-				.thenAnswer(invocation -> sources.getOrDefault(invocation.getArgument(0), Set.of()));
+		when(mockDefiningSqlDependencyDao.getSourceTablesOfObjects(anySet())).thenAnswer(invocation -> {
+			Set<IdAndVersion> dependentIds = invocation.getArgument(0);
+			// The DAO reports dependencies in its own order; the manager orders each node's edges.
+			List<Dependency> dependencies = new ArrayList<>();
+			dependentIds.forEach(dependent -> sources.getOrDefault(dependent, Set.of())
+					.forEach(source -> dependencies.add(new Dependency(dependent, source))));
+			return dependencies;
+		});
 		setupEntities();
 		setupStatuses();
 	}
@@ -356,19 +409,12 @@ public class TableLineageManagerTest {
 	}
 
 	private void setupDownstreamDao() {
-		when(mockDefiningSqlDependencyDao.getDependentsPage(any(), anyLong(), anyLong())).thenAnswer(invocation -> {
-			IdAndVersion source = invocation.getArgument(0);
-			long offset = invocation.getArgument(2);
-			if (offset > 0) {
-				return List.of();
-			}
-			// The DAO reports dependents in no particular order; the manager sorts them.
-			List<DependentObject> dependents = new ArrayList<>();
-			sources.forEach((dependent, its) -> {
-				if (its.contains(source)) {
-					dependents.add(new DependentObject(dependent, "MATERIALIZED_VIEW"));
-				}
-			});
+		when(mockDefiningSqlDependencyDao.getDependentsOfSources(anySet(), anyLong())).thenAnswer(invocation -> {
+			Set<IdAndVersion> sourceIds = invocation.getArgument(0);
+			// The DAO reports dependents in its own order; the manager orders each node's edges.
+			List<Dependency> dependents = new ArrayList<>();
+			sources.forEach((dependent, its) -> its.stream().filter(sourceIds::contains)
+					.forEach(source -> dependents.add(new Dependency(dependent, source))));
 			dependents.sort((a, b) -> Long.compare(b.objectId().getId(), a.objectId().getId()));
 			return dependents;
 		});
@@ -399,12 +445,9 @@ public class TableLineageManagerTest {
 	}
 
 	private void setupStatuses() {
-		when(mockTableStatusDao.getTableStatus(any())).thenAnswer(invocation -> {
-			TableStatus status = statuses.get(invocation.getArgument(0));
-			if (status == null) {
-				throw new NotFoundException("No status");
-			}
-			return status;
+		when(mockTableStatusDao.getTableStatuses(anySet())).thenAnswer(invocation -> {
+			Set<IdAndVersion> ids = invocation.getArgument(0);
+			return ids.stream().filter(statuses::containsKey).collect(Collectors.toMap(id -> id, statuses::get));
 		});
 	}
 
@@ -412,13 +455,18 @@ public class TableLineageManagerTest {
 		TableLineageNode node = new TableLineageNode().setId("syn" + id).setAccess(LineageAccess.READABLE).setName(name)
 				.setConcreteType(type);
 		if (state != null) {
-			node.setTableState(state).setStateChangedOn(changedOn).setErrorMessage(errorMessage);
+			node.setTableState(state).setStateChangedOn(changedOn).setErrorMessage(errorMessage).setIsStale(false);
 		}
 		return node;
 	}
 
 	private static TableLineageEdge edge(String sourceId, String dependentId) {
 		return new TableLineageEdge().setSourceId(sourceId).setDependentId(dependentId);
+	}
+
+	private static Map<String, Boolean> getStaleness(TableLineage lineage) {
+		return lineage.getNodes().stream().filter(node -> node.getIsStale() != null)
+				.collect(Collectors.toMap(TableLineageNode::getId, TableLineageNode::getIsStale));
 	}
 
 	private static List<String> nodeIds(TableLineage lineage) {

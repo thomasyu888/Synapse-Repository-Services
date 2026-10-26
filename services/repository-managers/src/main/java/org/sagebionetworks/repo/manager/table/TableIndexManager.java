@@ -1,5 +1,6 @@
 package org.sagebionetworks.repo.manager.table;
 
+import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -299,6 +300,25 @@ public interface TableIndexManager {
 	 * @return
 	 */
 	Long populateMaterializedViewFromDefiningSql(List<ColumnModel> viewSchema, QueryTranslator definingSql);
+
+	/**
+	 * Populate an index from SQL in the form of a materialized view's definingSQL, cancelling the build if it runs
+	 * longer than the given time.
+	 * 
+	 * @param schema
+	 * @param definingSql
+	 * @param queryTimeoutSeconds
+	 * @throws org.springframework.dao.QueryTimeoutException When the build ran out of time
+	 */
+	void populateIndexFromDefiningSql(List<ColumnModel> schema, QueryTranslator definingSql, int queryTimeoutSeconds);
+
+	/**
+	 * @param tableNamePrefix
+	 * @param createdBefore
+	 * @return The names of the index tables whose name starts with the given prefix and that were created before the
+	 *         given time
+	 */
+	List<String> getIndexTableNamesCreatedBefore(String tableNamePrefix, Timestamp createdBefore);
 
 	/**
 	 * Reset the state of the table index described by the given {@link IndexDescription}

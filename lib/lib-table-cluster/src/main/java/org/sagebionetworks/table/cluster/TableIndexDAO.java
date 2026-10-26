@@ -634,6 +634,24 @@ public interface TableIndexDAO {
 	void update(String string, Map<String, Object> parameters);
 
 	/**
+	 * Execute an update statement with the given parameters, cancelling it if it runs longer than the given time.
+	 * 
+	 * @param sql
+	 * @param parameters
+	 * @param queryTimeoutSeconds The most seconds the statement may run
+	 * @throws org.springframework.dao.QueryTimeoutException When the statement ran out of time
+	 */
+	void update(String sql, Map<String, Object> parameters, int queryTimeoutSeconds);
+
+	/**
+	 * @param tableNamePrefix
+	 * @param createdBefore
+	 * @return The names of the index tables whose name starts with the given prefix and that were created before the
+	 *         given time
+	 */
+	List<String> getTableNamesCreatedBefore(String tableNamePrefix, Timestamp createdBefore);
+
+	/**
 	 * Swap the two table indices
 	 * 
 	 * @param sourceIndexId

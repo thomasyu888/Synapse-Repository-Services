@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -75,6 +76,37 @@ public class TableStatusDAOImplTest {
 	public void after() {
 		nodeDaoObjectHelper.truncateAll();
 		tableStatusDAO.clearAllTableState();
+	}
+
+	@Test
+	public void testGetTableStatuses() throws NotFoundException {
+		IdAndVersion otherTable = IdAndVersion.parse("syn789");
+		IdAndVersion decoy = IdAndVersion.parse("syn999");
+		IdAndVersion noStatus = IdAndVersion.parse("syn555");
+		tableStatusDAO.resetTableStatusToProcessing(tableIdNoVersion, isResetToken);
+		tableStatusDAO.resetTableStatusToProcessing(tableIdWithVersion, isResetToken);
+		String token = tableStatusDAO.resetTableStatusToProcessing(otherTable, isResetToken);
+		tableStatusDAO.attemptToSetTableStatusToAvailable(otherTable, token, "etag");
+		tableStatusDAO.resetTableStatusToProcessing(decoy, isResetToken);
+
+		// call under test
+		Map<IdAndVersion, TableStatus> result = tableStatusDAO
+				.getTableStatuses(Set.of(tableIdNoVersion, tableIdWithVersion, otherTable, noStatus));
+
+		// The current version and a snapshot of the same table are told apart; a table with no status is left out.
+		assertEquals(Map.of(tableIdNoVersion, tableStatusDAO.getTableStatus(tableIdNoVersion), tableIdWithVersion,
+				tableStatusDAO.getTableStatus(tableIdWithVersion), otherTable, tableStatusDAO.getTableStatus(otherTable)),
+				result);
+		assertEquals(TableState.AVAILABLE, result.get(otherTable).getState());
+		assertEquals(TableState.PROCESSING, result.get(tableIdNoVersion).getState());
+	}
+
+	@Test
+	public void testGetTableStatusesWithEmptySet() {
+		tableStatusDAO.resetTableStatusToProcessing(tableIdNoVersion, isResetToken);
+
+		// call under test
+		assertEquals(Collections.emptyMap(), tableStatusDAO.getTableStatuses(Set.of()));
 	}
 
 	@Test

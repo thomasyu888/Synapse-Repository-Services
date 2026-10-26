@@ -57,6 +57,10 @@
         {
             "name": "searchindex",
             "description": "A search index entity that provides search over Synapse data via OpenSearch."
+        },
+        {
+            "name": "sqlworksheet",
+            "description": "A saved Synapse SQL query. It holds the SQL text only: nothing is built from it, and it is run on request."
         }
     ]
 }

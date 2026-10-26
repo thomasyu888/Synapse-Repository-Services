@@ -1,0 +1,17 @@
+{
+	"description": "A saved Synapse SQL query. A worksheet holds SQL text only: nothing is built from it and it records no dependency on the tables it names, so it never appears in table lineage and never rebuilds when they change. Its SQL is run on request, with the permissions of whoever runs it, through POST /table/sql/query/async/start. The SQL follows the rules of a materialized view's definingSQL, so it may JOIN or UNION several tables, and a worksheet's SQL can be saved as a materialized view unchanged.",
+	"implements": [
+		{
+			"$ref": "org.sagebionetworks.repo.model.VersionableEntity"
+		},
+		{
+			"$ref": "org.sagebionetworks.repo.model.table.HasDefiningSql"
+		}
+	],
+	"properties": {
+		"definingSQL": {
+			"description": "The Synapse SQL statement saved in the worksheet. It may reference several tables and views, and may contain JOIN and UNION clauses.",
+			"type": "string"
+		}
+	}
+}

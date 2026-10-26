@@ -17,7 +17,9 @@ import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -119,6 +121,28 @@ public class TableStatusDAOImpl implements TableStatusDAO {
 				.orElseThrow(() -> new NotFoundException(
 						String.format("Table status for '%s' does not exist", idAndVersion.toString())));
 		return TableStatusUtils.createDTOFromDBO(dbo);
+	}
+
+	@Override
+	public Map<IdAndVersion, TableStatus> getTableStatuses(Set<IdAndVersion> tableIds) {
+		ValidateArgument.required(tableIds, "tableIds");
+		if (tableIds.isEmpty()) {
+			return Map.of();
+		}
+		List<Long[]> idAndVersionList = tableIds.stream()
+				.map(id -> new Long[] { id.getId(), validateAndGetVersion(id) }).collect(Collectors.toList());
+		List<DBOTableStatus> dbos = namedParameterJdbcTemplate.query(
+				"SELECT * FROM TABLE_STATUS WHERE (TABLE_ID, VERSION) IN (:idAndVersionList)",
+				Map.of("idAndVersionList", idAndVersionList), tableMapping);
+		return dbos.stream().collect(Collectors.toMap(this::getIdAndVersion, TableStatusUtils::createDTOFromDBO));
+	}
+
+	private IdAndVersion getIdAndVersion(DBOTableStatus dbo) {
+		IdAndVersionBuilder builder = IdAndVersion.newBuilder().setId(dbo.getTableId());
+		if (dbo.getVersion() != NULL_VERSION) {
+			builder.setVersion(dbo.getVersion());
+		}
+		return builder.build();
 	}
 	
 	@WriteTransaction

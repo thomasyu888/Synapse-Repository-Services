@@ -27,7 +27,8 @@ public class LockContext {
 		BuildMaterializedView("Rebuilding materialized view: '%s' ..."),
 		UpdatingMaterializedView("Updating materialized view: '%s' ..."),
 		SearchIndexLifecycle("Building search index: '%s' ..."),
-		SearchIndexQuery("Querying search index: '%s' ...");
+		SearchIndexQuery("Querying search index: '%s' ..."),
+		SqlQuery("Running SQL that reads: '%s' ...");
 
 		String template;
 

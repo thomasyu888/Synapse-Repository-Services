@@ -97,7 +97,7 @@
             "type":"boolean"
         },
         "definingSQL": {
-            "description":"For materialized views, virtual tables, and search indexes, specifies the SQL defining the content.",
+            "description":"For materialized views, virtual tables, and search indexes, specifies the SQL defining the content. For SQL worksheets, the saved SQL.",
             "type": "string"
         },
         "validationResultFileHandleId": {

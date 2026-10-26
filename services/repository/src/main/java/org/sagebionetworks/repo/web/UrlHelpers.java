@@ -955,6 +955,9 @@ public class UrlHelpers {
 	public static final String TABLE_QUERY_ASYNC_START = TABLE_QUERY + ASYNC_START_REQUEST;
 	public static final String TABLE_QUERY_ASYNC_GET = TABLE_QUERY + ASYNC_GET_REQUEST;
 	public static final String TABLE_QUERY_NEXT_PAGE = TABLE_QUERY + "/nextPage";
+	public static final String TABLE_SQL_QUERY = TABLE + "/sql/query";
+	public static final String TABLE_SQL_QUERY_ASYNC_START = TABLE_SQL_QUERY + ASYNC_START_REQUEST;
+	public static final String TABLE_SQL_QUERY_ASYNC_GET = TABLE_SQL_QUERY + ASYNC_GET_REQUEST;
 	public static final String TABLE_QUERY_NEXT_PAGE_ASYNC_START = TABLE_QUERY_NEXT_PAGE + ASYNC_START_REQUEST;
 	public static final String TABLE_QUERY_NEXT_PAGE_ASYNC_GET = TABLE_QUERY_NEXT_PAGE + ASYNC_GET_REQUEST;
 	public static final String TABLE_DOWNLOAD_CSV = TABLE + "/download/csv";
