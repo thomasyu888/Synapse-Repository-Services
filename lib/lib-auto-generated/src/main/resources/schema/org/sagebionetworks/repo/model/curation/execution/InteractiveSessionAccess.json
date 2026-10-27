@@ -1,0 +1,14 @@
+{
+  "description": "A link that opens a running interactive session.",
+  "properties": {
+    "sessionUrl": {
+      "type": "string",
+      "description": "The URL that opens the session. It carries a single-use token bound to the user who asked for it."
+    },
+    "expiresOn": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the URL stops working if it has not been used."
+    }
+  }
+}

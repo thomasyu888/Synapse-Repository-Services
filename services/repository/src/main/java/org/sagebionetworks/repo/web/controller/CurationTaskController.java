@@ -1,5 +1,6 @@
 package org.sagebionetworks.repo.web.controller;
 
+import static org.sagebionetworks.repo.model.oauth.OAuthScope.download;
 import static org.sagebionetworks.repo.model.oauth.OAuthScope.modify;
 import static org.sagebionetworks.repo.model.oauth.OAuthScope.view;
 
@@ -11,12 +12,15 @@ import org.sagebionetworks.repo.model.InvalidModelException;
 import org.sagebionetworks.repo.model.UnauthorizedException;
 import org.sagebionetworks.repo.model.asynch.AsyncJobId;
 import org.sagebionetworks.repo.model.asynch.AsynchronousJobStatus;
+import org.sagebionetworks.repo.model.curation.ComputeTaskAction;
 import org.sagebionetworks.repo.model.curation.ComputeTaskExecutionRequest;
 import org.sagebionetworks.repo.model.curation.ComputeTaskExecutionResponse;
 import org.sagebionetworks.repo.model.curation.CurationTask;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionAccess;
+import org.sagebionetworks.repo.model.curation.execution.ListSessionEnvironmentsResponse;
 import org.sagebionetworks.repo.service.AsynchronousJobServices;
 import org.sagebionetworks.repo.service.CurationTaskService;
 import org.sagebionetworks.repo.web.NotFoundException;
@@ -237,6 +241,90 @@ public class CurationTaskController {
     @RequestMapping(value = UrlHelpers.CURATION_TASK_EXECUTE_ASYNC_GET, method = RequestMethod.GET)
     public @ResponseBody
     ComputeTaskExecutionResponse getTaskExecutionResult(
+            @RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId,
+            @PathVariable Long taskId,
+            @PathVariable String asyncToken) throws Throwable {
+        AsynchronousJobStatus jobStatus = asynchronousJobServices.getJobStatusAndThrow(userId, asyncToken);
+        return (ComputeTaskExecutionResponse) jobStatus.getResponseBody();
+    }
+
+    /**
+     * List the approved environments an
+     * <a href="${org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionProperties}">interactive session task</a>
+     * can run in. Each is an image with a reviewed list of packages; a session has no network, so nothing
+     * else can be installed in it. The list is empty on a stack that offers no interactive sessions.
+     *
+     * @param userId
+     * @return the approved environments
+     */
+    @RequiredScope({view})
+    @ResponseStatus(HttpStatus.OK)
+    @RequestMapping(value = UrlHelpers.CURATION_SESSION_ENVIRONMENTS, method = RequestMethod.GET)
+    public @ResponseBody
+    ListSessionEnvironmentsResponse listSessionEnvironments(
+            @RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId) {
+        return service.listSessionEnvironments(userId);
+    }
+
+    /**
+     * Get a single-use link that opens the running session of an interactive session task. Only the user
+     * who started the session can open it, and only while they can still download every one of its inputs.
+     * The session is started by executing the task.
+     *
+     * @param userId
+     * @param taskId the ID of the CurationTask
+     * @return the link to the session
+     */
+    @RequiredScope({view, download})
+    @ResponseStatus(HttpStatus.CREATED)
+    @RequestMapping(value = UrlHelpers.CURATION_TASK_SESSION_ACCESS, method = RequestMethod.POST)
+    public @ResponseBody
+    InteractiveSessionAccess openInteractiveSession(
+            @RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId,
+            @PathVariable Long taskId) {
+        return service.openInteractiveSession(userId, taskId);
+    }
+
+    /**
+     * Start an asynchronous job that ends the running session of an interactive session task. The job
+     * stops the session, collects the files it wrote to /outputs and moves the task to IN_REVIEW, where the
+     * outputs wait for review before anything leaves the session. The caller must be an assignee of the
+     * task or have UPDATE access on the task's project.
+     *
+     * @param userId
+     * @param taskId the ID of the CurationTask
+     * @return an AsyncJobId token to poll for results
+     */
+    @RequiredScope({view, modify})
+    @ResponseStatus(HttpStatus.CREATED)
+    @RequestMapping(value = UrlHelpers.CURATION_TASK_SESSION_END_ASYNC_START, method = RequestMethod.POST)
+    public @ResponseBody
+    AsyncJobId startEndInteractiveSession(
+            @RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId,
+            @PathVariable Long taskId) {
+        ComputeTaskExecutionRequest request = new ComputeTaskExecutionRequest();
+        request.setTaskId(taskId);
+        request.setAction(ComputeTaskAction.END_SESSION);
+        AsynchronousJobStatus job = asynchronousJobServices.startJob(userId, request);
+        AsyncJobId asyncJobId = new AsyncJobId();
+        asyncJobId.setToken(job.getJobId());
+        return asyncJobId;
+    }
+
+    /**
+     * Get the result of a job that ends an interactive session.
+     *
+     * @param userId
+     * @param taskId the ID of the CurationTask
+     * @param asyncToken the token returned by startEndInteractiveSession
+     * @return the execution response, with the outputs waiting for review
+     * @throws Throwable
+     */
+    @RequiredScope({view})
+    @ResponseStatus(HttpStatus.OK)
+    @RequestMapping(value = UrlHelpers.CURATION_TASK_SESSION_END_ASYNC_GET, method = RequestMethod.GET)
+    public @ResponseBody
+    ComputeTaskExecutionResponse getEndInteractiveSessionResult(
             @RequestParam(value = AuthorizationConstants.USER_ID_PARAM) Long userId,
             @PathVariable Long taskId,
             @PathVariable String asyncToken) throws Throwable {

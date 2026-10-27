@@ -4,6 +4,8 @@ import org.sagebionetworks.repo.model.curation.CurationTask;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionAccess;
+import org.sagebionetworks.repo.model.curation.execution.ListSessionEnvironmentsResponse;
 import org.sagebionetworks.repo.web.NotFoundException;
 
 public interface CurationTaskService {
@@ -22,4 +24,8 @@ public interface CurationTaskService {
     TaskStatus getTaskStatus(Long userId, Long taskId);
 
     TaskStatus updateTaskStatus(Long userId, Long taskId, TaskStatus statusUpdate);
+
+    ListSessionEnvironmentsResponse listSessionEnvironments(Long userId);
+
+    InteractiveSessionAccess openInteractiveSession(Long userId, Long taskId);
 }

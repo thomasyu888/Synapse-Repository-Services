@@ -1,0 +1,15 @@
+{
+  "description": "What a compute task execution job does.",
+  "name": "ComputeTaskAction",
+  "type": "string",
+  "enum": [
+    {
+      "name": "START",
+      "description": "Run the task's computation. The task must be NOT_STARTED."
+    },
+    {
+      "name": "END_SESSION",
+      "description": "End the task's running interactive session and collect its outputs for review. The task must be EXECUTING with a running session."
+    }
+  ]
+}

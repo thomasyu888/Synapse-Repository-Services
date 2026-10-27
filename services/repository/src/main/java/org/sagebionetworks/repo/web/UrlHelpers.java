@@ -1339,6 +1339,12 @@ public class UrlHelpers {
     public static final String CURATION_TASK_EXECUTE = CURATION_TASK_ID + "/execute";
     public static final String CURATION_TASK_EXECUTE_ASYNC_START = CURATION_TASK_EXECUTE + ASYNC_START_REQUEST;
     public static final String CURATION_TASK_EXECUTE_ASYNC_GET = CURATION_TASK_EXECUTE + ASYNC_GET_REQUEST;
+    public static final String CURATION_TASK_SESSION = CURATION_TASK_ID + "/session";
+    public static final String CURATION_TASK_SESSION_ACCESS = CURATION_TASK_SESSION + "/access";
+    public static final String CURATION_TASK_SESSION_END = CURATION_TASK_SESSION + "/end";
+    public static final String CURATION_TASK_SESSION_END_ASYNC_START = CURATION_TASK_SESSION_END + ASYNC_START_REQUEST;
+    public static final String CURATION_TASK_SESSION_END_ASYNC_GET = CURATION_TASK_SESSION_END + ASYNC_GET_REQUEST;
+    public static final String CURATION_SESSION_ENVIRONMENTS = "/curation/session/environments";
 
 	/**
 	 * API for creating integration test users

@@ -4,7 +4,7 @@
   "properties": {
     "concreteType": {
       "type": "string",
-      "description": "Indicates which implementation of CurationTaskProperties this object represents. Possible values include: 'org.sagebionetworks.repo.model.curation.metadata.FileBasedMetadataTaskProperties' and 'org.sagebionetworks.repo.model.curation.metadata.RecordBasedMetadataTaskProperties'."
+      "description": "Indicates which implementation of CurationTaskProperties this object represents. Possible values include: 'org.sagebionetworks.repo.model.curation.metadata.FileBasedMetadataTaskProperties', 'org.sagebionetworks.repo.model.curation.metadata.RecordBasedMetadataTaskProperties', 'org.sagebionetworks.repo.model.curation.execution.SampleSheetGenerationExecutionProperties', 'org.sagebionetworks.repo.model.curation.execution.RecordSetGenerationExecutionProperties' and 'org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionProperties'."
     }
   }
 }

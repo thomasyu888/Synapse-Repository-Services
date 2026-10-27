@@ -1,0 +1,33 @@
+{
+  "description": "The input parameters for an interactive session task. Running the task starts a JupyterLab session with no network access, over read-only copies of input files that the person starting it can download. Results leave the session only through review: when the session ends, the files it wrote to /outputs wait in IN_REVIEW until someone other than the person who ran it approves them.",
+  "implements": [
+    {
+      "$ref": "org.sagebionetworks.repo.model.curation.CurationTaskProperties"
+    }
+  ],
+  "properties": {
+    "inputFolderId": {
+      "type": "string",
+      "description": "Optional. The Synapse ID of the Folder whose direct-child FileEntities are copied, read-only, into the session's /inputs. The person starting the session must be able to download every one of them."
+    },
+    "inputTaskIds": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "description": "Optional. The IDs of interactive session tasks in the same project whose approved outputs are also inputs of this session. Each must be COMPLETED. This chains sessions: one session's reviewed results become the next one's read-only inputs."
+    },
+    "workspaceTaskId": {
+      "type": "integer",
+      "description": "Optional. The ID of an interactive session task in the same project whose /workspace this session shares, so that collaborators work on the same files. The referenced task must not itself share another task's workspace. A session in a shared workspace only starts if everyone who has run a session in it can download every input of every task in it."
+    },
+    "environmentId": {
+      "type": "string",
+      "description": "The ID of the approved environment the session runs in. An environment is an image with a reviewed list of packages; nothing else can be installed, since the session has no network."
+    },
+    "maxDurationMinutes": {
+      "type": "integer",
+      "description": "How long the session may run before it is ended automatically, in minutes. At most 720."
+    }
+  }
+}

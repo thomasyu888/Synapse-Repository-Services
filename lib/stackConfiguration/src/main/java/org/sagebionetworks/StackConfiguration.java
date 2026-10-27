@@ -1005,4 +1005,15 @@ public interface StackConfiguration {
 	 * @return The Claude Opus model ID.
 	 */
 	String getModelIdClaudeOpus();
+
+	/**
+	 * @return The base URL of the service that starts interactive sessions for compute tasks, or an empty
+	 *         string when this stack has none.
+	 */
+	String getSessionLauncherEndpoint();
+
+	/**
+	 * @return The shared secret the backend presents to the session launcher.
+	 */
+	String getSessionLauncherSecret();
 }

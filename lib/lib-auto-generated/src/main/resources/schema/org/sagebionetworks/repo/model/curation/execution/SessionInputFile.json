@@ -1,0 +1,21 @@
+{
+  "description": "A file copied into an interactive session's /inputs.",
+  "properties": {
+    "entityId": {
+      "type": "string",
+      "description": "The Synapse ID of the FileEntity."
+    },
+    "versionNumber": {
+      "type": "integer",
+      "description": "The version of the FileEntity that was copied."
+    },
+    "path": {
+      "type": "string",
+      "description": "The file's path under /inputs."
+    },
+    "sourceTaskId": {
+      "type": "integer",
+      "description": "The task whose approved outputs supplied this file, if it came from a chained task."
+    }
+  }
+}

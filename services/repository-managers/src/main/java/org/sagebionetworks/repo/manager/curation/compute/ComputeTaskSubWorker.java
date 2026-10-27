@@ -28,4 +28,24 @@ public interface ComputeTaskSubWorker<T extends ExecutableTaskExecutionDetails> 
 	 * @return The updated execution details after successful execution
 	 */
 	T execute(UserInfo user, CurationTask task, T executionDetails, AsyncJobProgressCallback callback) throws Exception;
+
+	/**
+	 * @param executionDetails The execution details returned by {@link #execute}.
+	 * @return False if the execution left something running, such as an interactive session, that stays
+	 *         EXECUTING until {@link #end} is called; true if the task is ready for review.
+	 */
+	default boolean isComplete(T executionDetails) {
+		return true;
+	}
+
+	/**
+	 * End what {@link #execute} left running, so that the task can go to review. Only sub-workers whose
+	 * executions can stay running support this.
+	 *
+	 * @return The updated execution details.
+	 */
+	default T end(UserInfo user, CurationTask task, T executionDetails, AsyncJobProgressCallback callback)
+			throws Exception {
+		throw new IllegalArgumentException("Task " + task.getTaskId() + " has nothing running to end.");
+	}
 }

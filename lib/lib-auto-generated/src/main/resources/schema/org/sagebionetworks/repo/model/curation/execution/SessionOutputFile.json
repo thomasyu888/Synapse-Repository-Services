@@ -1,0 +1,21 @@
+{
+  "description": "A file an interactive session wrote to /outputs, held for review.",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "The file's path under /outputs."
+    },
+    "contentSize": {
+      "type": "integer",
+      "description": "The size of the file in bytes."
+    },
+    "contentMd5": {
+      "type": "string",
+      "description": "The MD5 of the file's content."
+    },
+    "fileHandleId": {
+      "type": "string",
+      "description": "The file handle that holds the file in quarantine until it is reviewed."
+    }
+  }
+}

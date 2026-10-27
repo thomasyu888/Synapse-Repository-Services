@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.sagebionetworks.repo.manager.AccessControlListManager;
 import org.sagebionetworks.repo.manager.AuthorizationManager;
 import org.sagebionetworks.repo.manager.EntityManager;
+import org.sagebionetworks.repo.manager.curation.compute.InteractiveSessionSubWorker;
 import org.sagebionetworks.repo.model.ACCESS_TYPE;
 import org.sagebionetworks.repo.model.AuthorizationUtils;
 import org.sagebionetworks.repo.model.EntityType;
@@ -24,7 +25,10 @@ import org.sagebionetworks.repo.model.curation.DueDateFilter;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskBundle;
+import org.sagebionetworks.repo.model.curation.TaskState;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionDetails;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionProperties;
 import org.sagebionetworks.repo.model.curation.execution.RecordSetGenerationExecutionProperties;
 import org.sagebionetworks.repo.model.curation.execution.SampleSheetGenerationExecutionProperties;
 import org.sagebionetworks.repo.model.curation.metadata.FileBasedMetadataTaskProperties;
@@ -35,6 +39,8 @@ import org.sagebionetworks.repo.model.grid.AuthorizationMode;
 import org.sagebionetworks.repo.model.jdo.KeyFactory;
 import org.sagebionetworks.repo.transactions.WriteTransaction;
 import org.sagebionetworks.repo.web.NotFoundException;
+import org.sagebionetworks.schema.adapter.JSONObjectAdapterException;
+import org.sagebionetworks.schema.adapter.org.json.EntityFactory;
 import org.sagebionetworks.util.ValidateArgument;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -65,7 +71,16 @@ public class CurationTaskManagerImpl implements CurationTaskManager {
 
         authorizationManager.canAccess(userInfo, curationTask.getProjectId(), ObjectType.ENTITY, ACCESS_TYPE.CREATE).checkAuthorizationOrElseThrow();
 
-        return curationTaskDao.createCurationTask(userInfo.getId(), curationTask);
+        CurationTask created = curationTaskDao.createCurationTask(userInfo.getId(), curationTask);
+
+        if (isInteractiveSession(created)) {
+            // Synapse alone sets a session task's execution details, from the moment it exists.
+            TaskStatus status = curationTaskDao.getTaskStatus(created.getTaskId());
+            curationTaskDao.updateTaskStatus(userInfo.getId(), created.getTaskId(),
+                    status.setExecutionDetails(new InteractiveSessionExecutionDetails()));
+        }
+
+        return created;
     }
 
     @Override
@@ -91,6 +106,15 @@ public class CurationTaskManagerImpl implements CurationTaskManager {
 
         authorizationManager.canAccess(userInfo, existing.getProjectId(), ObjectType.ENTITY, ACCESS_TYPE.UPDATE).checkAuthorizationOrElseThrow();
 
+        if (isInteractiveSession(existing) || isInteractiveSession(toUpdate)) {
+            // The inputs and environment of a session that has run are part of its audit trail.
+            ValidateArgument.requirement(isInteractiveSession(existing) && isInteractiveSession(toUpdate),
+                    "A task cannot be changed to or from an interactive session task.");
+            TaskState state = curationTaskDao.getTaskStatus(existing.getTaskId()).getState();
+            ValidateArgument.requirement(TaskState.NOT_STARTED == state || TaskState.CANCELED == state,
+                    "An interactive session task can only be changed before its session starts. Current state: " + state);
+        }
+
         AuthorizationMode oldMode = getSuggestedAuthorizationMode(existing.getTaskProperties());
         AuthorizationMode newMode = getSuggestedAuthorizationMode(toUpdate.getTaskProperties());
 
@@ -107,6 +131,12 @@ public class CurationTaskManagerImpl implements CurationTaskManager {
         CurationTask existing = getCurationTask(userInfo, taskId);
 
         authorizationManager.canAccess(userInfo, existing.getProjectId(), ObjectType.ENTITY, ACCESS_TYPE.DELETE).checkAuthorizationOrElseThrow();
+
+        if (isInteractiveSession(existing)) {
+            TaskState state = curationTaskDao.getTaskStatus(taskId).getState();
+            ValidateArgument.requirement(TaskState.EXECUTING != state && TaskState.IN_REVIEW != state,
+                    "End the session and review its outputs before deleting an interactive session task. Current state: " + state);
+        }
 
         curationTaskDao.deleteCurationTask(taskId);
     }
@@ -217,7 +247,47 @@ public class CurationTaskManagerImpl implements CurationTaskManager {
 
         validateUpdateTaskStatus(userInfo, task);
 
+        if (isInteractiveSession(task)) {
+            validateInteractiveSessionStatusUpdate(curationTaskDao.getTaskStatus(taskId), statusUpdate);
+        }
+
         return curationTaskDao.updateTaskStatus(userInfo.getId(), taskId, statusUpdate);
+    }
+
+    private static boolean isInteractiveSession(CurationTask task) {
+        return task.getTaskProperties() instanceof InteractiveSessionExecutionProperties;
+    }
+
+    /**
+     * A session task's status moves through starting, running, ending and review only through the
+     * compute task execution jobs and the airlock review, so that nobody can mark their own outputs as
+     * reviewed. A status update may only cancel a task that has not started, or reopen a canceled one,
+     * and may only clear a previous start's error.
+     */
+    static void validateInteractiveSessionStatusUpdate(TaskStatus current, TaskStatus statusUpdate) {
+        Set<TaskState> editable = Set.of(TaskState.NOT_STARTED, TaskState.CANCELED);
+        ValidateArgument.requirement(editable.contains(current.getState()) && editable.contains(statusUpdate.getState()),
+                "The status of an interactive session task can only move between NOT_STARTED and CANCELED; "
+                        + "its session is started, ended and reviewed through its own requests. Current state: "
+                        + current.getState());
+        ValidateArgument.requirement(statusUpdate.getExecutionDetails() instanceof InteractiveSessionExecutionDetails,
+                "The executionDetails of an interactive session task must be InteractiveSessionExecutionDetails.");
+        InteractiveSessionExecutionDetails requested = (InteractiveSessionExecutionDetails) statusUpdate.getExecutionDetails();
+        InteractiveSessionExecutionDetails allowed = (current.getExecutionDetails() instanceof InteractiveSessionExecutionDetails stored
+                ? cloneDetails(stored) : new InteractiveSessionExecutionDetails())
+                .setErrorMessage(requested.getErrorMessage())
+                .setErrorDetails(requested.getErrorDetails());
+        ValidateArgument.requirement(allowed.equals(requested),
+                "The executionDetails of an interactive session task are set by Synapse; a status update may only clear errorMessage and errorDetails.");
+    }
+
+    private static InteractiveSessionExecutionDetails cloneDetails(InteractiveSessionExecutionDetails details) {
+        try {
+            return EntityFactory.createEntityFromJSONString(EntityFactory.createJSONStringForEntity(details),
+                    InteractiveSessionExecutionDetails.class);
+        } catch (JSONObjectAdapterException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private boolean isAuthorizedAssignee(UserInfo user, Long assigneeId) {
@@ -292,8 +362,39 @@ public class CurationTaskManagerImpl implements CurationTaskManager {
 
             validateReferencedTask(recordSetProperties.getDestinationTaskId(), "destinationTaskId",
                     RecordBasedMetadataTaskProperties.class, task.getProjectId());
+        } else if (task.getTaskProperties() instanceof InteractiveSessionExecutionProperties sessionProperties) {
+            validateInteractiveSessionProperties(userInfo, task, sessionProperties);
         } else {
             throw new IllegalArgumentException("Unknown CurationTaskProperties concreteType: " + task.getTaskProperties().getConcreteType());
+        }
+    }
+
+    private void validateInteractiveSessionProperties(UserInfo userInfo, CurationTask task,
+            InteractiveSessionExecutionProperties properties) {
+        ValidateArgument.required(properties.getEnvironmentId(), "environmentId");
+        InteractiveSessionSubWorker.validateMaxDurationMinutes(properties.getMaxDurationMinutes());
+
+        if (properties.getInputFolderId() != null) {
+            EntityType typeOfSpecifiedFolder = entityManager.getEntityType(userInfo, properties.getInputFolderId());
+            ValidateArgument.requirement(EntityType.folder.equals(typeOfSpecifiedFolder),
+                    "The inputFolderId must be a Folder.");
+        }
+        if (properties.getInputTaskIds() != null) {
+            for (Long inputTaskId : properties.getInputTaskIds()) {
+                ValidateArgument.requirement(!inputTaskId.equals(task.getTaskId()), "A task cannot be its own input task.");
+                validateReferencedTask(inputTaskId, "inputTaskIds", InteractiveSessionExecutionProperties.class,
+                        task.getProjectId());
+            }
+        }
+        if (properties.getWorkspaceTaskId() != null) {
+            ValidateArgument.requirement(!properties.getWorkspaceTaskId().equals(task.getTaskId()),
+                    "A task cannot share its own workspace.");
+            validateReferencedTask(properties.getWorkspaceTaskId(), "workspaceTaskId",
+                    InteractiveSessionExecutionProperties.class, task.getProjectId());
+            CurationTask owner = curationTaskDao.getCurationTask(properties.getWorkspaceTaskId()).orElseThrow();
+            ValidateArgument.requirement(
+                    ((InteractiveSessionExecutionProperties) owner.getTaskProperties()).getWorkspaceTaskId() == null,
+                    "The workspaceTaskId must reference a task that does not itself share another task's workspace.");
         }
     }
 

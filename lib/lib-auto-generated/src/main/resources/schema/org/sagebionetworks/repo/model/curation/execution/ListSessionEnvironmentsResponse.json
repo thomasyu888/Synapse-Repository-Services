@@ -1,0 +1,11 @@
+{
+  "description": "The approved environments for interactive sessions.",
+  "properties": {
+    "environments": {
+      "type": "array",
+      "items": {
+        "$ref": "org.sagebionetworks.repo.model.curation.execution.SessionEnvironment"
+      }
+    }
+  }
+}

@@ -121,6 +121,8 @@ import org.sagebionetworks.repo.model.curation.ComputeTaskExecutionResponse;
 import org.sagebionetworks.repo.model.curation.CurationTask;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionAccess;
+import org.sagebionetworks.repo.model.curation.execution.ListSessionEnvironmentsResponse;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
 import org.sagebionetworks.repo.model.dao.WikiPageKey;
 import org.sagebionetworks.repo.model.dataaccess.AccessApprovalNotificationRequest;
@@ -4922,6 +4924,29 @@ public interface SynapseClient extends BaseClient {
     String startComputeTaskExecution(Long taskId) throws SynapseException;
 
     ComputeTaskExecutionResponse getComputeTaskExecutionResult(Long taskId, String asyncToken) throws SynapseException, SynapseResultNotReadyException;
+
+    /**
+     * List the approved environments an interactive session task can run in.
+     */
+    ListSessionEnvironmentsResponse listSessionEnvironments() throws SynapseException;
+
+    /**
+     * Get a single-use link that opens the running session of an interactive session task.
+     */
+    InteractiveSessionAccess openInteractiveSession(Long taskId) throws SynapseException;
+
+    /**
+     * Start a job that ends the running session of an interactive session task and collects its outputs
+     * for review.
+     *
+     * @return the job's token
+     */
+    String startEndInteractiveSession(Long taskId) throws SynapseException;
+
+    /**
+     * Get the result of a job started by {@link #startEndInteractiveSession(Long)}.
+     */
+    ComputeTaskExecutionResponse getEndInteractiveSessionResult(Long taskId, String asyncToken) throws SynapseException, SynapseResultNotReadyException;
 
     RealmIdList listRealmIds() throws SynapseException ;
     

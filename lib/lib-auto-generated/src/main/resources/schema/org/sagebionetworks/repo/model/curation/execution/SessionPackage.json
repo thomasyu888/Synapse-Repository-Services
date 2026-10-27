@@ -1,0 +1,11 @@
+{
+  "description": "A package installed in a session environment.",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    }
+  }
+}

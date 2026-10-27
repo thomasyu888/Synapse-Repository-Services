@@ -150,6 +150,8 @@ import org.sagebionetworks.repo.model.curation.ComputeTaskExecutionResponse;
 import org.sagebionetworks.repo.model.curation.CurationTask;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionAccess;
+import org.sagebionetworks.repo.model.curation.execution.ListSessionEnvironmentsResponse;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
 import org.sagebionetworks.repo.model.dao.WikiPageKey;
 import org.sagebionetworks.repo.model.dataaccess.AccessApprovalNotificationRequest;
@@ -6866,6 +6868,30 @@ public class SynapseClientImpl extends BaseClientImpl implements SynapseClient {
     @Override
     public ComputeTaskExecutionResponse getComputeTaskExecutionResult(Long taskId, String asyncToken) throws SynapseException, SynapseResultNotReadyException {
         String url = "/curation/task/" + taskId + "/execute/async/get/" + asyncToken;
+        return (ComputeTaskExecutionResponse) getAsynchJobResponse(url, ComputeTaskExecutionResponse.class, getRepoEndpoint());
+    }
+
+    @Override
+    public ListSessionEnvironmentsResponse listSessionEnvironments() throws SynapseException {
+        return getJSONEntity(getRepoEndpoint(), "/curation/session/environments", ListSessionEnvironmentsResponse.class);
+    }
+
+    @Override
+    public InteractiveSessionAccess openInteractiveSession(Long taskId) throws SynapseException {
+        ValidateArgument.required(taskId, "taskId");
+        return postJSONEntity(getRepoEndpoint(), "/curation/task/" + taskId + "/session/access", null, InteractiveSessionAccess.class);
+    }
+
+    @Override
+    public String startEndInteractiveSession(Long taskId) throws SynapseException {
+        ValidateArgument.required(taskId, "taskId");
+        AsyncJobId jobId = postJSONEntity(getRepoEndpoint(), "/curation/task/" + taskId + "/session/end/async/start", null, AsyncJobId.class);
+        return jobId.getToken();
+    }
+
+    @Override
+    public ComputeTaskExecutionResponse getEndInteractiveSessionResult(Long taskId, String asyncToken) throws SynapseException, SynapseResultNotReadyException {
+        String url = "/curation/task/" + taskId + "/session/end/async/get/" + asyncToken;
         return (ComputeTaskExecutionResponse) getAsynchJobResponse(url, ComputeTaskExecutionResponse.class, getRepoEndpoint());
     }
 

@@ -27,16 +27,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.sagebionetworks.client.SynapseClient;
 import org.sagebionetworks.client.exceptions.SynapseBadRequestException;
 import org.sagebionetworks.client.exceptions.SynapseException;
+import org.sagebionetworks.client.exceptions.SynapseResultNotReadyException;
 import org.sagebionetworks.repo.model.Entity;
 import org.sagebionetworks.repo.model.Folder;
 import org.sagebionetworks.repo.model.Project;
 import org.sagebionetworks.repo.model.RecordSet;
+import org.sagebionetworks.repo.model.curation.ComputeTaskExecutionResponse;
 import org.sagebionetworks.repo.model.curation.CurationTask;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskBundle;
 import org.sagebionetworks.repo.model.curation.TaskState;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionDetails;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionProperties;
 import org.sagebionetworks.repo.model.curation.metadata.FileBasedMetadataTaskProperties;
 import org.sagebionetworks.repo.model.curation.metadata.RecordBasedMetadataTaskProperties;
 import org.sagebionetworks.repo.model.file.FileHandle;
@@ -337,4 +341,57 @@ public class ITCurationTaskControllerTest {
         }
     }
 
+    @Test
+    public void testInteractiveSessionTaskBeforeItStarts() throws Exception {
+        CurationTask task = synapse.createCurationTask(new CurationTask()
+                .setProjectId(project.getId())
+                .setDataType("analysis: interactive session")
+                .setInstructions("analyse the cohort in the enclave")
+                .setTaskProperties(new InteractiveSessionExecutionProperties()
+                        .setInputFolderId(folder.getId())
+                        .setEnvironmentId("python")
+                        .setMaxDurationMinutes(60L)));
+
+        try {
+            // call under test - Synapse gives a session task its execution details
+            TaskStatus status = synapse.getTaskStatus(task.getTaskId());
+            assertEquals(TaskState.NOT_STARTED, status.getState());
+            assertEquals(new InteractiveSessionExecutionDetails(), status.getExecutionDetails());
+
+            // call under test - the environments a session can run in (none on a stack without a launcher)
+            assertNotNull(synapse.listSessionEnvironments().getEnvironments());
+
+            // call under test - there is no session to open yet
+            Long taskId = task.getTaskId();
+            assertThrows(SynapseBadRequestException.class, () -> synapse.openInteractiveSession(taskId));
+
+            // call under test - nor one to end
+            String endToken = synapse.startEndInteractiveSession(taskId);
+            assertThrows(SynapseBadRequestException.class, () -> waitForEndInteractiveSessionResult(taskId, endToken));
+
+            // call under test - nobody can move a session task to review or completion through a status update
+            TaskStatus completed = synapse.getTaskStatus(taskId).setState(TaskState.COMPLETED);
+            assertThrows(SynapseBadRequestException.class, () -> synapse.updateTaskStatus(taskId, completed));
+
+            // call under test - but it can be canceled before it starts
+            TaskStatus canceled = synapse.updateTaskStatus(taskId, synapse.getTaskStatus(taskId).setState(TaskState.CANCELED));
+            assertEquals(TaskState.CANCELED, canceled.getState());
+        } finally {
+            synapse.deleteMetadataTask(task.getTaskId());
+        }
+    }
+
+    private ComputeTaskExecutionResponse waitForEndInteractiveSessionResult(Long taskId, String token) throws Exception {
+        long start = System.currentTimeMillis();
+        while (true) {
+            try {
+                return synapse.getEndInteractiveSessionResult(taskId, token);
+            } catch (SynapseResultNotReadyException e) {
+                if (System.currentTimeMillis() - start > 60_000) {
+                    throw new AssertionError("The job that ends the session did not finish in time.");
+                }
+                Thread.sleep(1000);
+            }
+        }
+    }
 }

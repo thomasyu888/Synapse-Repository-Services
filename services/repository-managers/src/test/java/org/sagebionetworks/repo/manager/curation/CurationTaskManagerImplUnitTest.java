@@ -55,7 +55,11 @@ import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskBundle;
 import org.sagebionetworks.repo.model.curation.TaskState;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionDetails;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionExecutionProperties;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionState;
 import org.sagebionetworks.repo.model.curation.execution.RecordSetGenerationExecutionProperties;
+import org.sagebionetworks.repo.model.curation.execution.SampleSheetGenerationExecutionDetails;
 import org.sagebionetworks.repo.model.curation.execution.SampleSheetGenerationExecutionProperties;
 import org.sagebionetworks.repo.model.curation.metadata.FileBasedMetadataTaskProperties;
 import org.sagebionetworks.repo.model.curation.metadata.RecordBasedMetadataTaskProperties;
@@ -1118,4 +1122,195 @@ public class CurationTaskManagerImplUnitTest {
         }
     }
 
+    private CurationTask createInteractiveSessionTask(Long id) {
+        return new CurationTask().setTaskId(id).setProjectId(projectId).setDataType("analysis-" + id)
+                .setTaskProperties(new InteractiveSessionExecutionProperties().setInputFolderId(uploadFolderId)
+                        .setEnvironmentId("python-3.12").setMaxDurationMinutes(120L));
+    }
+
+    @Test
+    public void testCreateCurationTaskWithInteractiveSession() {
+        CurationTask toCreate = createInteractiveSessionTask(null);
+        ((InteractiveSessionExecutionProperties) toCreate.getTaskProperties()).setInputTaskIds(List.of(inputTaskId))
+                .setWorkspaceTaskId(destinationTaskId);
+        CurationTask created = createInteractiveSessionTask(999L);
+        TaskStatus initialStatus = new TaskStatus().setTaskId(999L).setState(TaskState.NOT_STARTED).setEtag("etag-1");
+
+        when(mockEntityManager.getEntityType(userInfo, uploadFolderId)).thenReturn(EntityType.folder);
+        when(mockCurationTaskDao.getCurationTask(inputTaskId)).thenReturn(Optional.of(createInteractiveSessionTask(inputTaskId)));
+        when(mockCurationTaskDao.getCurationTask(destinationTaskId)).thenReturn(Optional.of(createInteractiveSessionTask(destinationTaskId)));
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.CREATE)).thenReturn(mockAuthorizationStatus);
+        when(mockCurationTaskDao.createCurationTask(userId, toCreate)).thenReturn(created);
+        when(mockCurationTaskDao.getTaskStatus(999L)).thenReturn(initialStatus);
+
+        // call under test
+        CurationTask result = curationTaskManager.createCurationTask(userInfo, toCreate);
+
+        assertSame(created, result);
+        verify(mockCurationTaskDao).updateTaskStatus(userId, 999L, new TaskStatus().setTaskId(999L)
+                .setState(TaskState.NOT_STARTED).setEtag("etag-1").setExecutionDetails(new InteractiveSessionExecutionDetails()));
+    }
+
+    @Test
+    public void testCreateCurationTaskWithInteractiveSessionInNestedWorkspace() {
+        CurationTask toCreate = createInteractiveSessionTask(null);
+        ((InteractiveSessionExecutionProperties) toCreate.getTaskProperties()).setWorkspaceTaskId(destinationTaskId);
+        CurationTask workspaceTask = createInteractiveSessionTask(destinationTaskId);
+        ((InteractiveSessionExecutionProperties) workspaceTask.getTaskProperties()).setWorkspaceTaskId(inputTaskId);
+
+        when(mockEntityManager.getEntityType(userInfo, uploadFolderId)).thenReturn(EntityType.folder);
+        when(mockCurationTaskDao.getCurationTask(destinationTaskId)).thenReturn(Optional.of(workspaceTask));
+
+        // call under test
+        String message = assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.createCurationTask(userInfo, toCreate)).getMessage();
+
+        assertEquals("The workspaceTaskId must reference a task that does not itself share another task's workspace.", message);
+        verify(mockCurationTaskDao, never()).createCurationTask(any(), any());
+    }
+
+    @Test
+    public void testCreateCurationTaskWithInteractiveSessionAndNonSessionInputTask() {
+        CurationTask toCreate = createInteractiveSessionTask(null);
+        ((InteractiveSessionExecutionProperties) toCreate.getTaskProperties()).setInputTaskIds(List.of(inputTaskId));
+
+        when(mockEntityManager.getEntityType(userInfo, uploadFolderId)).thenReturn(EntityType.folder);
+        when(mockCurationTaskDao.getCurationTask(inputTaskId)).thenReturn(Optional.of(new CurationTask().setTaskId(inputTaskId)
+                .setProjectId(projectId).setTaskProperties(new SampleSheetGenerationExecutionProperties())));
+
+        // call under test
+        String message = assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.createCurationTask(userInfo, toCreate)).getMessage();
+
+        assertEquals("The inputTaskIds must reference a task with InteractiveSessionExecutionProperties.", message);
+        verify(mockCurationTaskDao, never()).createCurationTask(any(), any());
+    }
+
+    @Test
+    public void testCreateCurationTaskWithInteractiveSessionAndNoMaxDuration() {
+        CurationTask toCreate = createInteractiveSessionTask(null);
+        ((InteractiveSessionExecutionProperties) toCreate.getTaskProperties()).setMaxDurationMinutes(null);
+
+        // call under test
+        assertThrows(IllegalArgumentException.class, () -> curationTaskManager.createCurationTask(userInfo, toCreate));
+
+        verify(mockCurationTaskDao, never()).createCurationTask(any(), any());
+    }
+
+    @Test
+    public void testUpdateCurationTaskWithInteractiveSessionAfterItStarted() {
+        CurationTask task = createInteractiveSessionTask(taskId);
+        when(mockEntityManager.getEntityType(userInfo, uploadFolderId)).thenReturn(EntityType.folder);
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.READ)).thenReturn(mockAuthorizationStatus);
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.UPDATE)).thenReturn(mockAuthorizationStatus);
+        when(mockCurationTaskDao.getCurationTask(taskId)).thenReturn(Optional.of(task));
+        when(mockCurationTaskDao.getTaskStatus(taskId)).thenReturn(new TaskStatus().setState(TaskState.EXECUTING));
+
+        // call under test
+        String message = assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.updateCurationTask(userInfo, task)).getMessage();
+
+        assertEquals("An interactive session task can only be changed before its session starts. Current state: EXECUTING", message);
+        verify(mockCurationTaskDao, never()).updateCurationTask(any(), any());
+    }
+
+    @Test
+    public void testUpdateCurationTaskFromInteractiveSessionToAnotherType() {
+        CurationTask existing = createInteractiveSessionTask(taskId);
+        CurationTask toUpdate = createCurationTask(CurationTaskPropertiesType.RECORD_BASED).setTaskId(taskId);
+        when(mockEntityManager.getEntityType(userInfo, recordSetId)).thenReturn(EntityType.recordset);
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.READ)).thenReturn(mockAuthorizationStatus);
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.UPDATE)).thenReturn(mockAuthorizationStatus);
+        when(mockCurationTaskDao.getCurationTask(taskId)).thenReturn(Optional.of(existing));
+
+        // call under test
+        assertThrows(IllegalArgumentException.class, () -> curationTaskManager.updateCurationTask(userInfo, toUpdate));
+
+        verify(mockCurationTaskDao, never()).updateCurationTask(any(), any());
+    }
+
+    @Test
+    public void testDeleteCurationTaskWithRunningSession() {
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.READ)).thenReturn(mockAuthorizationStatus);
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.DELETE)).thenReturn(mockAuthorizationStatus);
+        when(mockCurationTaskDao.getCurationTask(taskId)).thenReturn(Optional.of(createInteractiveSessionTask(taskId)));
+        when(mockCurationTaskDao.getTaskStatus(taskId)).thenReturn(new TaskStatus().setState(TaskState.EXECUTING));
+
+        // call under test
+        assertThrows(IllegalArgumentException.class, () -> curationTaskManager.deleteCurationTask(userInfo, taskId));
+
+        verify(mockCurationTaskDao, never()).deleteCurationTask(any());
+    }
+
+    private void setupStatusUpdateOfInteractiveSession(TaskStatus current) {
+        when(mockCurationTaskDao.getCurationTask(taskId)).thenReturn(Optional.of(createInteractiveSessionTask(taskId)));
+        when(mockAuthorizationManager.canAccess(userInfo, projectId, ObjectType.ENTITY, ACCESS_TYPE.UPDATE))
+                .thenReturn(AuthorizationStatus.authorized());
+        when(mockCurationTaskDao.getTaskStatus(taskId)).thenReturn(current);
+    }
+
+    @Test
+    public void testUpdateTaskStatusWithInteractiveSessionCanceledAfterFailedStart() {
+        InteractiveSessionExecutionDetails failed = new InteractiveSessionExecutionDetails().setStartedBy(userId.toString())
+                .setStartedOn(new Date(1_700_000_000_000L)).setErrorMessage("launcher unreachable")
+                .setErrorDetails("java.lang.IllegalStateException");
+        setupStatusUpdateOfInteractiveSession(new TaskStatus().setState(TaskState.NOT_STARTED).setExecutionDetails(failed));
+        TaskStatus statusUpdate = new TaskStatus().setState(TaskState.CANCELED).setEtag("etag-1")
+                .setExecutionDetails(new InteractiveSessionExecutionDetails().setStartedBy(userId.toString())
+                        .setStartedOn(new Date(1_700_000_000_000L)));
+        TaskStatus updated = new TaskStatus().setTaskId(taskId).setState(TaskState.CANCELED);
+        when(mockCurationTaskDao.updateTaskStatus(userId, taskId, statusUpdate)).thenReturn(updated);
+
+        // call under test
+        TaskStatus result = curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate);
+
+        assertSame(updated, result);
+    }
+
+    @Test
+    public void testUpdateTaskStatusWithInteractiveSessionMarkedCompletedByItsRunner() {
+        InteractiveSessionExecutionDetails inReview = new InteractiveSessionExecutionDetails().setSessionId("session-1")
+                .setSessionState(InteractiveSessionState.ENDED).setStartedBy(userId.toString());
+        setupStatusUpdateOfInteractiveSession(new TaskStatus().setState(TaskState.IN_REVIEW).setExecutionDetails(inReview));
+        TaskStatus statusUpdate = new TaskStatus().setState(TaskState.COMPLETED).setEtag("etag-1").setExecutionDetails(inReview);
+
+        // call under test
+        String message = assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate)).getMessage();
+
+        assertEquals("The status of an interactive session task can only move between NOT_STARTED and CANCELED; its session"
+                + " is started, ended and reviewed through its own requests. Current state: IN_REVIEW", message);
+        verify(mockCurationTaskDao, never()).updateTaskStatus(any(), any(), any());
+    }
+
+    @Test
+    public void testUpdateTaskStatusWithInteractiveSessionForgedDetails() {
+        setupStatusUpdateOfInteractiveSession(new TaskStatus().setState(TaskState.NOT_STARTED)
+                .setExecutionDetails(new InteractiveSessionExecutionDetails()));
+        // An approved output folder would make arbitrary files look like reviewed outputs to chained tasks.
+        TaskStatus statusUpdate = new TaskStatus().setState(TaskState.NOT_STARTED).setEtag("etag-1")
+                .setExecutionDetails(new InteractiveSessionExecutionDetails().setOutputFolderId("syn666"));
+
+        // call under test
+        String message = assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate)).getMessage();
+
+        assertEquals("The executionDetails of an interactive session task are set by Synapse; a status update may only"
+                + " clear errorMessage and errorDetails.", message);
+        verify(mockCurationTaskDao, never()).updateTaskStatus(any(), any(), any());
+    }
+
+    @Test
+    public void testUpdateTaskStatusWithInteractiveSessionAndOtherDetailsType() {
+        setupStatusUpdateOfInteractiveSession(new TaskStatus().setState(TaskState.NOT_STARTED)
+                .setExecutionDetails(new InteractiveSessionExecutionDetails()));
+        TaskStatus statusUpdate = new TaskStatus().setState(TaskState.NOT_STARTED).setEtag("etag-1")
+                .setExecutionDetails(new SampleSheetGenerationExecutionDetails());
+
+        // call under test
+        assertThrows(IllegalArgumentException.class,
+                () -> curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate));
+
+        verify(mockCurationTaskDao, never()).updateTaskStatus(any(), any(), any());
+    }
 }

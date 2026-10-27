@@ -1,0 +1,15 @@
+{
+  "description": "The state of an interactive session.",
+  "name": "InteractiveSessionState",
+  "type": "string",
+  "enum": [
+    {
+      "name": "RUNNING",
+      "description": "The session is running and can be opened by the person who started it."
+    },
+    {
+      "name": "ENDED",
+      "description": "The session has stopped and its outputs have been collected for review."
+    }
+  ]
+}

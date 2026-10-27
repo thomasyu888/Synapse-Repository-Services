@@ -1,0 +1,24 @@
+{
+  "description": "An approved environment for interactive sessions: an image, pinned by digest, with a reviewed list of packages.",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The ID of the environment, used as environmentId in InteractiveSessionExecutionProperties."
+    },
+    "name": {
+      "type": "string",
+      "description": "The environment's display name."
+    },
+    "imageDigest": {
+      "type": "string",
+      "description": "The digest of the image the environment runs."
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "org.sagebionetworks.repo.model.curation.execution.SessionPackage"
+      },
+      "description": "The packages installed in the image."
+    }
+  }
+}

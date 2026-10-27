@@ -1437,4 +1437,14 @@ public class StackConfigurationImpl implements StackConfiguration {
 	public Long getBedrockConverseSocketTimeoutSeconds() {
 		return Long.valueOf(configuration.getProperty("org.sagebionetworks.bedrock.converse.socket.timeout.seconds"));
 	}
+
+	@Override
+	public String getSessionLauncherEndpoint() {
+		return configuration.getProperty("org.sagebionetworks.session.launcher.endpoint");
+	}
+
+	@Override
+	public String getSessionLauncherSecret() {
+		return stackEncrypter.getDecryptedProperty("org.sagebionetworks.session.launcher.secret");
+	}
 }

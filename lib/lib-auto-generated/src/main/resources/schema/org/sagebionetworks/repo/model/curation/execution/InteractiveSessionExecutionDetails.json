@@ -1,0 +1,44 @@
+{
+  "description": "Execution details for an interactive session task. Set by Synapse as the session starts, runs and ends; a status update cannot change them.",
+  "implements": [
+    {
+      "$ref": "org.sagebionetworks.repo.model.curation.execution.ExecutableTaskExecutionDetails"
+    }
+  ],
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "description": "The ID of the running session, issued by the session launcher."
+    },
+    "sessionState": {
+      "$ref": "org.sagebionetworks.repo.model.curation.execution.InteractiveSessionState"
+    },
+    "workspaceId": {
+      "type": "string",
+      "description": "The ID of the /workspace the session mounted: the ID of the task that owns the workspace."
+    },
+    "endsOn": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the session is ended automatically."
+    },
+    "inputFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "org.sagebionetworks.repo.model.curation.execution.SessionInputFile"
+      },
+      "description": "The files copied into the session's /inputs, recorded for the audit trail."
+    },
+    "outputFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "org.sagebionetworks.repo.model.curation.execution.SessionOutputFile"
+      },
+      "description": "The files the session wrote to /outputs, waiting for review."
+    },
+    "outputFolderId": {
+      "type": "string",
+      "description": "The Synapse ID of the Folder that holds the approved outputs. Set when the outputs are approved; chained tasks read their inputs from it."
+    }
+  }
+}

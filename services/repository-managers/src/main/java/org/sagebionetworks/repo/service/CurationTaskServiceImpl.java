@@ -2,11 +2,14 @@ package org.sagebionetworks.repo.service;
 
 import org.sagebionetworks.repo.manager.UserManager;
 import org.sagebionetworks.repo.manager.curation.CurationTaskManager;
+import org.sagebionetworks.repo.manager.curation.compute.session.InteractiveSessionManager;
 import org.sagebionetworks.repo.model.UserInfo;
 import org.sagebionetworks.repo.model.curation.CurationTask;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskRequest;
 import org.sagebionetworks.repo.model.curation.ListCurationTaskResponse;
 import org.sagebionetworks.repo.model.curation.TaskStatus;
+import org.sagebionetworks.repo.model.curation.execution.InteractiveSessionAccess;
+import org.sagebionetworks.repo.model.curation.execution.ListSessionEnvironmentsResponse;
 import org.sagebionetworks.repo.web.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -15,14 +18,17 @@ import org.springframework.stereotype.Service;
 public class CurationTaskServiceImpl implements CurationTaskService {
 
     private final CurationTaskManager curationTaskManager;
+    private final InteractiveSessionManager interactiveSessionManager;
     private final UserManager userManager;
 
     @Autowired
     public CurationTaskServiceImpl(
             CurationTaskManager curationTaskManager,
+            InteractiveSessionManager interactiveSessionManager,
             UserManager userManager
     ) {
         this.curationTaskManager = curationTaskManager;
+        this.interactiveSessionManager = interactiveSessionManager;
         this.userManager = userManager;
     }
 
@@ -66,5 +72,17 @@ public class CurationTaskServiceImpl implements CurationTaskService {
     public TaskStatus updateTaskStatus(Long userId, Long taskId, TaskStatus statusUpdate) {
         UserInfo userInfo = userManager.getUserInfo(userId);
         return curationTaskManager.updateTaskStatus(userInfo, taskId, statusUpdate);
+    }
+
+    @Override
+    public ListSessionEnvironmentsResponse listSessionEnvironments(Long userId) {
+        UserInfo userInfo = userManager.getUserInfo(userId);
+        return interactiveSessionManager.listEnvironments(userInfo);
+    }
+
+    @Override
+    public InteractiveSessionAccess openInteractiveSession(Long userId, Long taskId) {
+        UserInfo userInfo = userManager.getUserInfo(userId);
+        return interactiveSessionManager.openSession(userInfo, taskId);
     }
 }
